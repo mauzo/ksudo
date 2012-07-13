@@ -6,31 +6,43 @@
  *
  */
 
-#include <err.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <strings.h>
-#include <sysexits.h>
 
-#include <krb5.h>
+#include "ksudo.h"
 
-#include "chk.h"
-#include "asn1/ksudo.h"
+krb5_context        k5ctx;
+krb5_auth_context   k5auth;
 
-krb5_context k5ctx;
+void    get_creds   (const char *host, krb5_creds *cred);
+void    init        ();
+void    send_creds  (int sock, krb5_creds *cred);
+void    usage       ();
 
 void
-usage ()
+init ()
 {
-    errx(EX_USAGE, "Usage: ksudo server");
+    dKRBCHK;
+
+    if (ke = krb5_init_context(&k5ctx))
+        errx(EX_UNAVAILABLE, "can't create krb5 context");
+
+    KRBCHK(krb5_auth_con_init(k5ctx, &k5auth),
+        "can't create auth context");
 }
 
 void
-get_creds (const char *srvname, krb5_creds *cred)
+get_creds (const char *host, krb5_creds *cred)
 {
-    dKRBCHK;
+    dRV; dKRBCHK;
+    char            *srvname;
     krb5_ccache     cc;
     krb5_principal  cli, srv;
     krb5_creds      mcred;
+
+    SYSCHK(asprintf(&srvname, "%s/%s", KSUDO_SRV, host),
+        "can't build server principal name");
 
     debug("looking for [%s] in ccache...", srvname);
 
@@ -39,8 +51,6 @@ get_creds (const char *srvname, krb5_creds *cred)
 
     KRBCHK(krb5_parse_name(k5ctx, srvname, &srv),
         "can't parse server name");
-
-    debug("got server name");
 
     bzero(&mcred, sizeof mcred);
     mcred.server = srv;
@@ -59,6 +69,7 @@ get_creds (const char *srvname, krb5_creds *cred)
             break;
 
         case KRB5_CC_NOTFOUND:
+        case KRB5_CC_END:
             break;
 
         default:
@@ -78,18 +89,47 @@ get_creds (const char *srvname, krb5_creds *cred)
         "can't store ticket in ccache");
 }
 
+void
+send_creds (int sock, krb5_creds *cred)
+{
+    dKRBCHK;
+    krb5_data               packet;
+    krb5_ap_rep_enc_part    *ep;
+
+    KRBCHK(krb5_mk_req_extended(k5ctx, &k5auth, 0, NULL, cred, &packet),
+        "can't build AP-REQ");
+    send_packet(sock, &packet);
+    krb5_data_free(&packet);
+
+    read_packet(sock, &packet);
+    KRBCHK(krb5_rd_rep(k5ctx, k5auth, &packet, &ep),
+        "can't read AP-REP");
+    krb5_data_free(&packet);
+    krb5_free_ap_rep_enc_part(k5ctx, ep);
+
+    debug("done AP exchange");
+}
+
+void
+usage ()
+{
+    errx(EX_USAGE, "Usage: ksudo server");
+}
+
 int
 main (int argc, char **argv)
 {
     dKRBCHK;
-    const char          *srv;
+    char                *srv, *canon;
+    int                 sock;
     krb5_creds          cred;
 
     if (argc != 2) usage();
     srv = argv[1];
 
-    if (ke = krb5_init_context(&k5ctx))
-        errx(EX_UNAVAILABLE, "can't create krb5 context");
+    init();
 
-    get_creds(srv, &cred);
+    sock = create_socket(srv, AI_CANONNAME, &canon);
+    get_creds(canon, &cred);
+    send_creds(sock, &cred);
 }

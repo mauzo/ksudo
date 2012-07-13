@@ -14,8 +14,9 @@ CFLAGS+= 	-I. ${CFLAGS_krb5}
 LIBS_krb5!=	krb5-config --libs krb5
 LIBS+=		${LIBS_krb5}
 
-PROGS=		ksudo
-OBJS_ksudo=	ksudo.o asn1/asn1.o
+PROGS=		ksudo ksudod
+OBJS_ksudo=	ksudo.o asn1/asn1.o io.o sock.o
+OBJS_ksudod=	ksudod.o asn1/asn1.o io.o sock.o
 
 .for p in ${PROGS}
 OBJS+=		${OBJS_${p}}
@@ -30,7 +31,7 @@ ${p}: ${OBJS_${p}}
 .endfor
 
 .for o in ${OBJS}
-${o}: chk.h asn1/ksudo.h
+${o}: ksudo.h chk.h asn1/ksudo.h
 
 .endfor
 

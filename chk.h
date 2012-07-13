@@ -23,14 +23,18 @@ debug(const char *msg, ...) { }
     if (ke = (e)) \
         krb5_err(k5ctx, EX_UNAVAILABLE, ke, (m))
 
-#define dSYSCHK int rv
+#define dRV int rv
 #define SYSCHK(e, m) \
     if ((rv = (e)) < 0) \
         err(1, (m))
 
-#define dRESCHK int h_rv
 #define RESCHK(e, m) \
-    if ((h_rv = (e)) < 0) \
+    if ((rv = (e)) < 0) \
         errx(1, "%s: %s", (m), hstrerror(h_errno))
+
+#define GAICHK(e, m) \
+    if ((rv = (e))) \
+        errx(1, "%s: %s", (m), (rv == EAI_SYSTEM \
+            ? strerror(errno) : gai_strerror(rv))) 
 
 #endif
