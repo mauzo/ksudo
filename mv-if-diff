@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if cmp $1 $2 >/dev/null 2>&1
+then
+    rm $1
+else
+    mv $1 $2
+fi

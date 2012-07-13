@@ -1,0 +1,116 @@
+KSUDO DEFINITIONS ::=
+BEGIN
+
+KSUDO-ERR-CODE ::= INTEGER {
+    KSUDO_OK(0),
+    KSUDO_ENOENT(1),
+    KSUDO_EACCES(2),
+    KSUDO_ENOEXEC(3),
+    KSUDO_EPERM(4)
+}
+
+KSUDO-ERR ::= SEQUENCE {
+    code        KSUDO-ERR-CODE,
+    msg         IA5String
+}
+
+KSUDO-ENVOPT-CWD ::= OCTET STRING
+
+KSUDO-ENVOPT-ENV ::= SEQUENCE {
+    name        OCTET STRING,
+    value       OCTET STRING
+}
+
+KSUDO-FD-MODE ::= INTEGER {
+    KSUDO_FD_READ(0),
+    KSUDO_FD_WRITE(1),
+    KSUDO_FD_RDWR(2)
+}
+
+KSUDO-ENVOPT-REMOTEFD ::= SEQUENCE {
+    fd      INTEGER,
+    mode    KSUDO-FD-MODE
+}
+
+KSUDO-ENVOPT-LOCALFD ::= SEQUENCE {
+    fd      INTEGER,
+    mode    KSUDO-FD-MODE,
+    path    OCTET STRING
+}
+
+KSUDO-ENVOPT-DUPFD ::= SEQUENCE {
+    fd      INTEGER,
+    onto    INTEGER
+}
+
+KSUDO-ENVOPT-TTY ::= NULL
+
+KSUDO-ENV-OPT ::= CHOICE {
+    cwd     [0] KSUDO-ENVOPT-CWD,
+    rfd     [1] KSUDO-ENVOPT-REMOTEFD,
+    lfd     [2] KSUDO-ENVOPT-LOCALFD,
+    dup     [3] KSUDO-ENVOPT-DUPFD,
+    tty     [4] KSUDO-ENVOPT-TTY
+}
+
+KSUDO-CMD ::= SEQUENCE {
+    user        IA5String,
+    cmd         SEQUENCE OF OCTET STRING,
+    env         SEQUENCE OF KSUDO-ENV-OPT
+}
+
+KSUDO-DATA ::= SEQUENCE {
+    fd      INTEGER,
+    data    OCTET STRING
+}
+
+KSUDO-CLOSE ::= INTEGER
+
+-- list taken from SUSv4
+KSUDO-SIGNAL-WK ::= INTEGER {
+    KSUDO_SIGABRT(1),
+    KSUDO_SIGALRM(2),
+    KSUDO_SIGBUS(3),
+    KSUDO_SIGCHLD(4),
+    KSUDO_SIGCONT(5),
+    KSUDO_SIGFPE(6),
+    KSUDO_SIGHUP(7),
+    KSUDO_SIGILL(8),
+    KSUDO_SIGINT(9),
+    KSUDO_SIGKILL(10),
+    KSUDO_SIGPIPE(11),
+    KSUDO_SIGQUIT(12),
+    KSUDO_SIGSEGV(13),
+    KSUDO_SIGSTOP(14),
+    KSUDO_SIGTERM(15),
+    KSUDO_SIGTSTP(16),
+    KSUDO_SIGTTIN(17),
+    KSUDO_SIGTTOU(18),
+    KSUDO_SIGUSR1(19),
+    KSUDO_SIGUSR2(20),
+    KSUDO_SIGTRAP(21),
+    KSUDO_SIGURG(22),
+    KSUDO_SIGXCPU(23),
+    KSUDO_SIGXFSZ(24)
+}
+
+KSUDO-SIGNAL ::= CHOICE {
+    wellknown   [0] KSUDO-SIGNAL-WK,
+    system      [1] INTEGER
+}
+
+KSUDO-EXIT ::= CHOICE {
+    status  [0] INTEGER,
+    signal  [1] KSUDO-SIGNAL
+}
+
+KSUDO-MSG ::= CHOICE {
+    err     [0] KSUDO-ERR,
+    cmd     [1] KSUDO-CMD,
+    data    [2] KSUDO-DATA,
+    close   [3] KSUDO-CLOSE,
+    signal  [4] KSUDO-SIGNAL,
+    exit    [5] KSUDO-EXIT
+}
+
+END
