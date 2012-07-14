@@ -59,6 +59,7 @@ get_creds (const char *host, krb5_creds *cred)
     bzero(&mcred, sizeof mcred);
     mcred.server = srv;
     ke = krb5_cc_retrieve_cred(k5ctx, cc, 0, &mcred, cred);
+    krb5_free_principal(k5ctx, srv);
 
     switch (ke) {
         case 0:
@@ -91,6 +92,10 @@ get_creds (const char *host, krb5_creds *cred)
 
     KRBCHK(krb5_cc_store_cred(k5ctx, cc, cred),
         "can't store ticket in ccache");
+
+    KRBCHK(krb5_cc_close(k5ctx, cc), "can't close ccache");
+
+    free(srvname);
 }
 
 void
@@ -164,9 +169,14 @@ main (int argc, char **argv)
     init();
 
     sock = create_socket(srv, AI_CANONNAME, &canon);
+
     get_creds(canon, &cred);
+    free(canon);
+
     send_creds(sock, &cred);
     krb5_free_cred_contents(k5ctx, &cred);
 
     send_cmd(sock, usr, cmdc, cmdv);
+
+    krb5_free_context(k5ctx);
 }

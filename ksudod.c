@@ -155,4 +155,6 @@ main (int argc, char **argv)
             "can't accept connection");
         ksudod(clisock);
     }
+
+    krb5_free_context(k5ctx);
 }
