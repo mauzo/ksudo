@@ -57,25 +57,48 @@ read_packet (int sck, krb5_data *pkt)
 }
 
 void
-read_to_eof(int fd, krb5_data *buf)
+send_msg (int sock, KSUDO_MSG *msg)
 {
-    dRV; dKRBCHK;
-    int cur, sz;
+    dKRBCHK;
+    size_t      len, outlen;
+    krb5_data   der, packet;
 
-    cur = 0; sz = 1024;
-    KRBCHK(krb5_data_alloc(buf, sz),
-        "can't allocate buffer");
+    len = length_KSUDO_MSG(msg);
+    KRBCHK(krb5_data_alloc(&der, len),
+        "can't allocate DER buffer");
 
-    while (rv = read(fd, buf->data + cur, sz - cur)) {
-        SYSCHK(rv, "can't read stdin");
-        cur += rv;
-        if (sz - cur < 512) {
-            sz += 1024;
-            KRBCHK(krb5_data_realloc(buf, sz),
-                "can't reallocate buffer");
-        }
-    }
+    /* Because DER values are preceded by their lengths, Heimdal's
+     * encode_ functions start at the end of the buffer and work
+     * backwards.
+     */
+    KRBCHK(encode_KSUDO_MSG(der.data + len - 1, len, msg, &outlen),
+        "can't DER-encode KSUDO-MSG");
+    free_KSUDO_MSG(msg);
 
-    KRBCHK(krb5_data_realloc(buf, cur),
-        "can't trim buffer");
+    if (outlen != len)
+        errx(EX_SOFTWARE, "DER-encoding came out the wrong length");
+
+    KRBCHK(krb5_mk_priv(k5ctx, k5auth, &der, &packet, NULL),
+        "can't encrypt KSUDO-MSG");
+    krb5_data_free(&der);
+
+    send_packet(sock, &packet);
+    krb5_data_free(&packet);
+}
+
+void
+read_msg (int sock, KSUDO_MSG *msg)
+{
+    dKRBCHK;
+    krb5_data   packet, der;
+
+    read_packet(sock, &packet);
+
+    KRBCHK(krb5_rd_priv(k5ctx, k5auth, &packet, &der, NULL),
+        "can't decrypt KSUDO-MSG");
+    krb5_data_free(&packet);
+
+    KRBCHK(decode_KSUDO_MSG(der.data, der.length, msg, NULL),
+        "can't decode KSUDO-MSG");
+    krb5_data_free(&der);
 }

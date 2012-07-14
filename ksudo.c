@@ -6,8 +6,11 @@
  *
  */
 
+#include <sys/types.h>
+
 #include <netdb.h>
 #include <stdio.h>
+#include <string.h>
 #include <strings.h>
 
 #include "ksudo.h"
@@ -17,6 +20,7 @@ krb5_auth_context   k5auth;
 
 void    get_creds   (const char *host, krb5_creds *cred);
 void    init        ();
+void    send_cmd    (int sock, const char *usr, int cmdc, char **cmdv);
 void    send_creds  (int sock, krb5_creds *cred);
 void    usage       ();
 
@@ -90,6 +94,33 @@ get_creds (const char *host, krb5_creds *cred)
 }
 
 void
+send_cmd (int sock, const char *user, int cmdc, char **cmdv)
+{
+    dRV; dKRBCHK;
+    KSUDO_MSG   msg, decode;
+    KSUDO_CMD   *cmd;
+    int         i;
+    size_t      len, outlen;
+    krb5_data   der, packet;
+
+    msg.element         = choice_KSUDO_MSG_cmd;
+    cmd = &msg.u.cmd;
+    cmd->user.length    = strlen(user);
+    cmd->user.data      = strdup(user);
+    cmd->env.len        = 0;
+    cmd->env.val        = NULL;
+    cmd->cmd.len        = cmdc;
+
+    New(cmd->cmd.val, cmdc);
+    for (i = 0; i < cmdc; i++) {
+        cmd->cmd.val[i].length  = strlen(cmdv[i]);
+        cmd->cmd.val[i].data    = strdup(cmdv[i]);
+    }
+
+    send_msg(sock, &msg);
+}
+
+void
 send_creds (int sock, krb5_creds *cred)
 {
     dKRBCHK;
@@ -113,23 +144,29 @@ send_creds (int sock, krb5_creds *cred)
 void
 usage ()
 {
-    errx(EX_USAGE, "Usage: ksudo server");
+    errx(EX_USAGE, "Usage: ksudo server user cmd");
 }
 
 int
 main (int argc, char **argv)
 {
     dKRBCHK;
-    char                *srv, *canon;
-    int                 sock;
+    char                *srv, *canon, *usr, **cmdv;
+    int                 cmdc, sock;
     krb5_creds          cred;
 
-    if (argc != 2) usage();
+    if (argc < 4) usage();
     srv = argv[1];
+    usr = argv[2];
+    cmdv = argv + 3;
+    cmdc = argc - 3;
 
     init();
 
     sock = create_socket(srv, AI_CANONNAME, &canon);
     get_creds(canon, &cred);
     send_creds(sock, &cred);
+    krb5_free_cred_contents(k5ctx, &cred);
+
+    send_cmd(sock, usr, cmdc, cmdv);
 }
