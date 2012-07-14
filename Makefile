@@ -35,6 +35,9 @@ ${o}: ksudo.h chk.h asn1/ksudo.h
 
 .endfor
 
+.PHONY: asn1
+asn1: asn1/ksudo.h
+
 asn1/ksudo.h: asn1/ksudo.asn1
 	${MAKE} -C asn1 asn1
 
