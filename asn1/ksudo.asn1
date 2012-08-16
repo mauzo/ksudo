@@ -6,7 +6,8 @@ KSUDO-ERR-CODE ::= INTEGER {
     KSUDO_ENOENT(1),
     KSUDO_EACCES(2),
     KSUDO_ENOEXEC(3),
-    KSUDO_EPERM(4)
+    KSUDO_EPERM(4),
+    KSUDO_WINDOW_EXCEEDED(5)
 }
 
 KSUDO-ERR ::= SEQUENCE {
@@ -64,6 +65,11 @@ KSUDO-DATA ::= SEQUENCE {
     data    OCTET STRING
 }
 
+KSUDO-WINDOW ::= SEQUENCE {
+    fd      INTEGER,
+    incr    INTEGER
+}
+
 KSUDO-CLOSE ::= INTEGER
 
 -- list taken from SUSv4
@@ -108,9 +114,10 @@ KSUDO-MSG ::= CHOICE {
     err     [0] KSUDO-ERR,
     cmd     [1] KSUDO-CMD,
     data    [2] KSUDO-DATA,
-    close   [3] KSUDO-CLOSE,
-    signal  [4] KSUDO-SIGNAL,
-    exit    [5] KSUDO-EXIT
+    window  [3] KSUDO-WINDOW,
+    close   [4] KSUDO-CLOSE,
+    signal  [5] KSUDO-SIGNAL,
+    exit    [6] KSUDO-EXIT
 }
 
 END
