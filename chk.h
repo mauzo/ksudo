@@ -16,7 +16,20 @@ debug(const char *msg, ...) { }
 
 #define New(v, n) \
     if (!((v) = malloc(sizeof(*(v)) * (n)))) \
-        err(1, "malloc failed")
+        err(EX_UNAVAILABLE, "malloc failed")
+
+#define Renew(v, n) \
+    if (!((v) = realloc((v), (n) * sizeof(*(v))))) \
+        err(EX_UNAVAILABLE, "malloc failed")
+
+#ifdef HAVE_FREE_OF_NULL
+#  define Free free
+#else
+#  define Free(v) if (v) free(v)
+#endif
+
+#define Copy(f, t, n) \
+    memcpy((t), (f), (n)*(sizeof(*(t))))
 
 #define dKRBCHK krb5_error_code ke
 #define KRBCHK(e, m) \

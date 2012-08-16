@@ -31,7 +31,7 @@ ${p}: ${OBJS_${p}}
 .endfor
 
 .for o in ${OBJS}
-${o}: ksudo.h chk.h asn1/ksudo.h
+${o}: config.h compat.h ksudo.h chk.h asn1/ksudo.h
 
 .endfor
 

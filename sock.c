@@ -13,7 +13,6 @@
 
 #include <err.h>
 #include <netdb.h>
-#include <string.h>
 #include <sysexits.h>
 
 #include "ksudo.h"

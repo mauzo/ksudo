@@ -16,6 +16,9 @@
 
 #include <krb5.h>
 
+#include "config.h"
+#include "compat.h"
+
 #include "chk.h"
 #include "asn1/ksudo.h"
 
