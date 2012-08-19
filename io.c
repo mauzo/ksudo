@@ -102,3 +102,23 @@ read_msg (int sock, KSUDO_MSG *msg)
         "can't decode KSUDO-MSG");
     krb5_data_free(&der);
 }
+
+int
+buf_2data(ksudo_buf *buf, krb5_data *dat, size_t len)
+{
+    dKRBCHK;
+
+    if (BufFILL(buf) < len) return -1;
+
+    if (BufCONTIG(buf) >= len) {
+        dat->data    = BufSTART(buf);
+        dat->length   = len;
+        return 0;
+    }
+    else {
+        KRBCHK(krb5_data_alloc(dat, len),
+            "can't allocate buffer");
+        BufCPYOUT(buf, dat->data, len);
+        return 1;
+    }
+}
