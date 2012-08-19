@@ -11,6 +11,7 @@
 
 #include <err.h>
 #include <errno.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <sysexits.h>
 
@@ -99,11 +100,74 @@ typedef struct {
             Copy((v), BufSTART(b), (l)); \
     } while (0)
 
+typedef struct {
+    void    (*read_ready)   (int, void *);
+    void    (*write_ready)  (int, void *);
+    int     (*try_unblock)  (int, void *);
+} ksudo_fdops;
+
+typedef struct {
+    unsigned    read        : 1;
+    unsigned    write       : 1;
+    unsigned    blocking    : 1;
+    unsigned    wndsent     : 1;
+
+    ksudo_fdops     *ops;
+    void            *data;
+
+    ksudo_buf       *rbuf;
+    ksudo_buf       *wbuf;
+    /* the ix of the ksfd we are blocked on */
+    int             blocked;
+} ksudo_fd;
+
+#define KsfL(f)     (ksfds[(f)])
+
+#define KsfREAD(f)  (KsfL(f).read)
+#define KsfWRITE(f) (KsfL(f).write)
+
+#define KsfHASOP(f, o)  (KsfL(f).ops && KsfL(f).ops->o)
+/* This assumes ops are always called in void context. If that changes
+ * this will need to change to a (?:) expression.
+ */
+#define KsfCALLOP(f, o) \
+    if (KsfHASOP(f, o)) KsfL(f).ops->o((f), KsfL(f).data)
+
+#define KsfRBUF(f)  Assert(KsfL(f).rbuf)
+#define KsfWBUF(f)  Assert(KsfL(f).wbuf)
+
+#define KsfPOLL(f)  (pollfds[(f)])
+#define KsfFD(f)    (KsfPOLL(f).fd)
+
+typedef struct {
+    int     session;
+} ksudo_fddata_msg;
+
+typedef struct {
+    int     session;
+    int     fd;
+    /* wbuf->start last time we sent a window update */
+    uchar   *lastwnd;
+    /* the maximum size of our next packet */
+    size_t  nextwnd;
+} ksudo_fddata_data;
+
+extern int              nksfds;
+extern ksudo_fd         *ksfds;
+extern struct pollfd    *pollfds;
+
 /* io.c */
 void    read_packet     (int fd, krb5_data *packet);
 void    write_packet    (int fd, krb5_data *packet);
 void    read_msg        (int fd, KSUDO_MSG *msg);
 void    write_msg       (int fd, KSUDO_MSG *msg);
+
+int     ksf_open        (int fd, KSUDO_FD_MODE mode, ksudo_fdops *ops, 
+                            void *data, int hasbuf);
+void    ksf_close       (int ix);
+void    ksf_read        (int ix);
+void    ksf_write       (int ix);
+void    ioloop          ();
 
 /* sock.c */
 int     create_socket   (const char *host, int flags, char **canon);
