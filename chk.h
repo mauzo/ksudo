@@ -14,6 +14,24 @@ static inline void
 debug(const char *msg, ...) { }
 #define debug warnx
 
+/* This is an assert() which returns the value asserted. To implement
+ * this we need GCC's block-expressions, so don't bother with it if we
+ * don't have them.
+ */
+#ifdef HAVE_BLOCK_EXPR
+#  define Assert(e) \
+    ({ \
+        typeof(e) __tmpe = (e); \
+        if (!__tmpe) \
+            errx(EX_SOFTWARE, \
+                "Assertion failed: %s at %s line %u", \
+                #e, __FILE__, __LINE__); \
+        __tmpe; \
+    })
+#else
+#  define Assert(e) (e)
+#endif
+
 #define New(v, n) \
     if (!((v) = malloc(sizeof(*(v)) * (n)))) \
         err(EX_UNAVAILABLE, "malloc failed")
