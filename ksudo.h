@@ -34,70 +34,66 @@ extern krb5_auth_context    k5auth;
 
 typedef unsigned char       uchar;
 
-/* A ring buffer. If end == BufSIZE, the buffer is full. */
+/* This is a buffer which holds at least KSUDO_BUFSIZ. If necessary the
+ * active portion gets moved back to the beginning, since the krb5
+ * functions require their buffers to be contiguous.
+ */
 typedef struct { 
-    uchar   buf[KSUDO_BUFSIZ];
-    size_t  start;
-    size_t  end;
+    uchar   buf[2*KSUDO_BUFSIZ];
+    uchar   *start;
+    uchar   *end;
 } ksudo_buf;
 
-#define BufSIZE(b)  (KSUDO_BUFSIZ)
+#define BufSIZE(b)      (2*KSUDO_BUFSIZ)
 
-#define Buf_FULL(b, e)  ((e) == BufSIZE(b))
-#define BufFULL(b)      Buf_FULL(b, (b)->end)
 #define BufBUF(b)       ((b)->buf)
-#define BufSTART(b)     (BufBUF(b) + (b)->start)
-#define BufEND(b)       (BufFULL(b) ? BufSTART(b) : BufBUF(b) + (b)->end)
+#define BufSTART(b)     ((b)->start)
+#define BufEND(b)       ((b)->end)
+#define BufBUFEND(b)    (BufBUF(b) + BufSIZE(b))
 
-#define BufDIFF(b, s, e) \
-    (Buf_FULL(b, e) ? BufSIZE(b) : \
-        (s) > (e) ? (BufSIZE(b) - ((s) - (e))) : ((e) - (s)))
-#define BufFILL(b) \
-    (BufFULL(b) ? BufSIZE(b) : BufDIFF(b, (b)->start, (b)->end))
-#define BufFREE(b)      (BufSIZE(b) - BufFILL(b))
-#define BufCONTIG(b)    (BufSIZE(b) - (b)->start)
-#define BufCFREE(b)     (BufSIZE(b) - (b)->end)
+#define BufFILL(b)      (BufEND(b) - BufSTART(b))
+#define BufFREE(b)      (BufBUFEND(b) - BufEND(b))
 
-#define BufIX(b, p)     (BufBUF(b) + (p))
-#define BufINC(b, p, n) \
+#define NewBuf(b) \
     do { \
-        Assert((p) >= 0 && (p) < BufSIZE(b)); \
-        (p) += (n); \
-        if ((p) > BufSIZE(b)) (p) -= BufSIZE(b); \
+        New(b, 1); \
+        (b)->start = (b)->end = BufBUF(b); \
     } while (0)
 
+/* Attempt to ensure BufFREE is at least n. This may not succeed, so be
+ * sure to check BufFREE afterwards.
+ */
+#define BufENSURE(b, n) \
+    do { \
+        Assert((n) <= KSUDO_BUFSIZ); \
+        if (BufFREE(b) < (n)) { \
+            Copy(BufSTART(b), BufBUF(b), BufFILL(b)); \
+            (b)->end = BufBUF(b) + BufFILL(b); \
+            (b)->start = BufBUF(b); \
+        } \
+    } while (0)
+
+/* Shift the end of the buffer forwards. This should be called *after*
+ * populating the newly-valid region of the buffer.
+ */
 #define BufEXTEND(b, n) \
     do { \
-        BufINC(b, (b)->end, n); \
-        if ((b)->end == (b)->start) (b)->end = BufSIZE(b); \
+        Assert((n) <= BufFREE(b)); \
+        (b)->end += (n); \
     } while (0)
 
+/* Shift the beginning of the buffer forwards. If the buffer ends up
+ * empty, take advantage of the situation to reset both pointers back to
+ * the beginning.
+ */
 #define BufCONSUME(b, n) \
     do { \
-       if ((b)->end == BufSIZE(b)) (b)->end = (b)->start; \
-       BufINC(b, (b)->start, n); \
-    } while (0)
-
-#define BufCPYIN(b, v, l) \
-    do { \
-        Assert((l) > BufFREE(b)); \
-        if ((l) > BufCFREE(b)) { \
-            Copy(BufEND(b), (v), BufCFREE(b)); \
-            Copy(BufBUF(b), (v) + BufCFREE(b), (l) - BufCFREE(b)); \
+        Assert((n) <= BufFILL(b)); \
+        (b)->start += (n); \
+        if (BufFILL(b) == 0) { \
+            (b)->start  = BufBUF(b); \
+            (b)->end    = BufBUF(b); \
         } \
-        else \
-            Copy(BufEND(b), (v), (l)); \
-    } while (0)
-
-#define BufCPYOUT(b, v, l) \
-    do { \
-        Assert((l) > BufFILL(b)); \
-        if ((l) > BufCONTIG(b)) { \
-            Copy((v), BufSTART(b), BufCONTIG(b)); \
-            Copy((v) + BufCONTIG(b), BufBUF(b), (l) - BufCONTIG(b)); \
-        } \
-        else \
-            Copy((v), BufSTART(b), (l)); \
     } while (0)
 
 typedef struct {

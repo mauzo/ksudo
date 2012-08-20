@@ -109,26 +109,6 @@ read_msg (int sock, KSUDO_MSG *msg)
 }
 
 int
-buf_2data(ksudo_buf *buf, krb5_data *dat, size_t len)
-{
-    dKRBCHK;
-
-    if (BufFILL(buf) < len) return -1;
-
-    if (BufCONTIG(buf) >= len) {
-        dat->data    = BufSTART(buf);
-        dat->length   = len;
-        return 0;
-    }
-    else {
-        KRBCHK(krb5_data_alloc(dat, len),
-            "can't allocate buffer");
-        BufCPYOUT(buf, dat->data, len);
-        return 1;
-    }
-}
-
-int
 ksf_open (int fd, KSUDO_FD_MODE mode, ksudo_fdops *ops, void *data, 
             int hasbuf)
 {
@@ -180,8 +160,8 @@ ksf_open (int fd, KSUDO_FD_MODE mode, ksudo_fdops *ops, void *data,
     ksf->data       = data;
 
     if (hasbuf) {
-        if (KsfREAD(i))     New(ksf->rbuf, 1);
-        if (KsfWRITE(i))    New(ksf->wbuf, 1);
+        if (KsfREAD(i))     NewBuf(ksf->rbuf);
+        if (KsfWRITE(i))    NewBuf(ksf->wbuf);
     }
 
     SYSCHK(fdflags = fcntl(fd, F_GETFL, 0),
@@ -211,20 +191,13 @@ ksf_read (int ix)
     dRV;
     int             fd      = KsfFD(ix);
     ksudo_buf       *buf    = KsfRBUF(ix);
-    struct iovec    iov[2];
 
-    if (buf->end == BufSIZE(buf)) return;
+    Assert(KsfREAD(ix));
 
-    if (buf->end > buf->start) {
-        iov[0].iov_base = buf->buf + buf->end;
-        iov[0].iov_len  = BufSIZE(buf) - buf->end;
-        iov[1].iov_base = buf->buf;
-        iov[1].iov_len  = buf->start;
-        rv = readv(fd, iov, 2);
-    }
-    else {
-        rv = read(fd, buf->buf + buf->end, buf->start - buf->end);
-    }
+    BufENSURE(buf, KSUDO_BUFSIZ);
+    if (!BufFREE(buf)) return;
+
+    rv = read(fd, BufEND(buf), BufFREE(buf));
 
     if (rv == EAGAIN) return;
     SYSCHK(rv, "read failed");
@@ -236,27 +209,13 @@ void
 ksf_write (int ix)
 {
     dRV;
-    int             fd  = KsfFD(ix);
-    ksudo_buf       *buf;
-    struct iovec    iov[2];
-    size_t          end;
+    int             fd      = KsfFD(ix);
+    ksudo_buf       *buf    = KsfWBUF(ix);
 
-    buf = KsfWBUF(ix);
+    Assert(KsfWRITE(ix));
+    if (!BufFILL(buf)) return;
 
-    if (buf->end == buf->start) return;
-
-    end = (buf->end == BufSIZE(buf)) ? buf->start : buf->end;
-
-    if (buf->start >= end) {
-        iov[0].iov_base = buf->buf + buf->start;
-        iov[0].iov_len  = BufSIZE(buf) - buf->start;
-        iov[1].iov_base = buf->buf;
-        iov[1].iov_len  = end;
-        rv = writev(fd, iov, 2);
-    }
-    else {
-        rv = write(fd, buf->buf + buf->start, end - buf->start);
-    }
+    rv = write(fd, BufSTART(buf), BufFILL(buf));
 
     if (rv == EAGAIN) return;
     SYSCHK(rv, "write failed");
