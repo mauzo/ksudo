@@ -6,6 +6,8 @@
 #ifndef __config_h__
 #define __config_h__
 
+#define DEBUG
+
 #define HAVE_BLOCK_EXPR
 
 #define HAVE_STRING_H

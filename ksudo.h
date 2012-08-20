@@ -133,8 +133,8 @@ typedef struct {
 #define KsfCALLOP(f, o) \
     if (KsfHASOP(f, o)) KsfL(f).ops->o((f), KsfL(f).data)
 
-#define KsfRBUF(f)  Assert(KsfL(f).rbuf)
-#define KsfWBUF(f)  Assert(KsfL(f).wbuf)
+#define KsfRBUF(f)  AssertX(KsfL(f).rbuf)
+#define KsfWBUF(f)  AssertX(KsfL(f).wbuf)
 
 #define KsfPOLL(f)  (pollfds[(f)])
 #define KsfFD(f)    (KsfPOLL(f).fd)

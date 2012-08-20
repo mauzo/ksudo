@@ -10,16 +10,38 @@
 #ifndef __chk_h__
 #define __chk_h__
 
+#define NOOP (void)0
+
+#ifdef DEBUG
+#  define debug warnx
+#else
 static inline void
 debug(const char *msg, ...) { }
-#define debug warnx
+#endif
+
+/* This is an ordinary assert() which returns void. AssertX below is
+ * more useful in some circumstances, but only works with expressions
+ * which can be passed to typeof(). Since this does not include
+ * bitfields we need an alternative.
+ */
+#ifdef DEBUG
+#  define Assert(e) \
+    do { \
+        if (!(e)) \
+            errx(EX_SOFTWARE, \
+                "Assertion failed: %s at %s line %u", \
+                #e, __FILE__, __LINE__); \
+    } while (0)
+#else
+#  define Assert(e) NOOP
+#endif
 
 /* This is an assert() which returns the value asserted. To implement
  * this we need GCC's block-expressions, so don't bother with it if we
  * don't have them.
  */
-#ifdef HAVE_BLOCK_EXPR
-#  define Assert(e) \
+#if defined(DEBUG) && defined(HAVE_BLOCK_EXPR)
+#  define AssertX(e) \
     ({ \
         typeof(e) __tmpe = (e); \
         if (!__tmpe) \
@@ -29,7 +51,7 @@ debug(const char *msg, ...) { }
         __tmpe; \
     })
 #else
-#  define Assert(e) (e)
+#  define AssertX(e) (e)
 #endif
 
 #define New(v, n) \
