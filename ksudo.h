@@ -219,6 +219,10 @@ typedef struct {
 #define KssMBUF(s)      (&KsfDATA(KssL(s).msgfd, msg)->wbuf)
 
 typedef struct {
+   ksudo_sop    startop;
+} ksudo_fddata_listen;
+
+typedef struct {
     int             session;
     ksudo_buf       rbuf;
     ksudo_msgbuf    wbuf;
@@ -243,6 +247,7 @@ extern ksudo_fd         *ksfds;
 extern struct pollfd    *pollfds;
 
 extern ksudo_fdops
+    ksudo_fdops_listen,
     ksudo_fdops_msg,
     ksudo_fdops_data;
 
