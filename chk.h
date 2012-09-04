@@ -58,22 +58,45 @@ debug(const char *msg, ...) { }
 #  define AssertXX(a, v)    (v)
 #endif
 
+#ifdef DEBUG_MEM
+#  define mem_debug debug
+#else
+#  define mem_debug(m, ...) NOOP
+#endif
+
 #define New(v, n) \
-    if (!((v) = malloc(sizeof(*(v)) * (n)))) \
-        err(EX_UNAVAILABLE, "malloc failed")
+    do { \
+        if (!((v) = malloc(sizeof(*(v)) * (n)))) \
+            err(EX_UNAVAILABLE, "malloc failed"); \
+        mem_debug("New [%lx]", (v)); \
+    } while (0)
 
 #define Renew(v, n) \
-    if (!((v) = realloc((v), (n) * sizeof(*(v))))) \
-        err(EX_UNAVAILABLE, "malloc failed")
+    do { \
+        mem_debug("Renew [%lx]", (v)); \
+        if (!((v) = realloc((v), (n) * sizeof(*(v))))) \
+            err(EX_UNAVAILABLE, "malloc failed"); \
+        mem_debug("  -> [%lx]", (v)); \
+    } while (0)
 
-#ifdef HAVE_FREE_OF_NULL
-#  define Free free
+#ifdef DEBUG_MEM
+#  define Free(v) \
+    do { mem_debug("Free [%lx]", (v)); if (v) free(v); } while (0)
 #else
-#  define Free(v) if (v) free(v)
+#  ifdef HAVE_FREE_OF_NULL
+#    define Free free
+#  else
+#    define Free(v) if (v) free(v)
+#  endif
 #endif
 
 #define Copy(f, t, n) \
     memcpy((t), (f), (n)*(sizeof(*(t))))
+
+#define Zero(v, n) \
+    memset((v), 0, (n)*sizeof(*(v)))
+
+#define NewZ(v, n) do { New((v), (n)); Zero((v), (n)); } while (0)
 
 #define dKRBCHK krb5_error_code ke
 #define KRBCHK(e, m) \
