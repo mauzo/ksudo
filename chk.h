@@ -19,6 +19,8 @@ static inline void
 debug(const char *msg, ...) { }
 #endif
 
+#define Panic(m) errx(EX_SOFTWARE, "panic: %s", (m))
+
 /* This is an ordinary assert() which returns void. AssertX below is
  * more useful in some circumstances, but only works with expressions
  * which can be passed to typeof(). Since this does not include
@@ -50,8 +52,10 @@ debug(const char *msg, ...) { }
                 #e, __FILE__, __LINE__); \
         __tmpe; \
     })
+#  define AssertXX(a, v) ({ Assert(a); (v); })
 #else
-#  define AssertX(e) (e)
+#  define AssertX(e)        (e)
+#  define AssertXX(a, v)    (v)
 #endif
 
 #define New(v, n) \
