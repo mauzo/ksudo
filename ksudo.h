@@ -54,10 +54,17 @@ typedef struct {
 #define BufFILL(b)      (BufEND(b) - BufSTART(b))
 #define BufFREE(b)      (BufBUFEND(b) - BufEND(b))
 
+#define BufINIT(b) \
+    do { \
+        (b)->start = (b)->end = BufBUF(b); \
+        debug("NewBuf buf [%lx] start [%lx] end [%lx]", \
+            BufBUF(b), BufSTART(b), BufEND(b)); \
+    } while (0)
+
 #define NewBuf(b) \
     do { \
         New(b, 1); \
-        (b)->start = (b)->end = BufBUF(b); \
+        BufINIT(b); \
     } while (0)
 
 /* Attempt to ensure BufFREE is at least n. This may not succeed, so be
@@ -188,6 +195,29 @@ typedef struct {
 #define KsfPOLL(f)  (pollfds[(f)])
 #define KsfFD(f)    (KsfPOLL(f).fd)
 
+typedef void (*ksudo_sop) (int, krb5_data *);
+
+#define KSUDO_SOP(n)    static void n (int sess, krb5_data *pkt)
+#define KSSs_NONE       ((ksudo_sop)0)
+
+typedef struct {
+    ksudo_sop   state;
+
+    /* these are ksfds, not OS fds */
+    int     msgfd;
+    int     *datafds;
+    int     ttyfd;
+} ksudo_session;
+
+#define KssL(s)         (sessions[(s)])
+#define KssSTATE(s)     (KssL(s).state)
+#define KssOK(s)        (KssSTATE(s) != KSSs_NONE)
+#define KssCALL(s, d)   (KssSTATE(s)((s), (d)))
+#define KssNEXT(s, f)   (KssL(s).state = (f))
+
+#define KssMSGFD(s, f)  (KssL(s).msgfd = (f))
+#define KssMBUF(s)      (&KsfDATA(KssL(s).msgfd, msg)->wbuf)
+
 typedef struct {
     int             session;
     ksudo_buf       rbuf;
@@ -216,6 +246,9 @@ extern ksudo_fdops
     ksudo_fdops_msg,
     ksudo_fdops_data;
 
+extern int              nsessions;
+extern ksudo_session    *sessions;
+
 /* io.c */
 int     ksf_open        (int fd, KSUDO_FD_MODE mode, KSF_TYPE type, 
                             void *data);
@@ -227,6 +260,9 @@ void    ioloop          ();
 /* msg.c */
 int     read_msg        (krb5_data *pkt, KSUDO_MSG *msg);
 int     write_msg       (ksudo_msgbuf *buf, KSUDO_MSG *msg);
+
+/* session.c */
+void    kss_init        (int sess, int fd, ksudo_sop start);
 
 /* sock.c */
 int     create_socket   (const char *host, int flags, char **canon);

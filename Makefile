@@ -15,7 +15,7 @@ LIBS_krb5!=	krb5-config --libs krb5
 LIBS+=		${LIBS_krb5}
 
 PROGS=		ksudo ksudod
-OBJS_all=	asn1/asn1.o io.o msg.o sock.o
+OBJS_all=	asn1/asn1.o io.o msg.o session.o sock.o
 OBJS_ksudo=	ksudo.o
 OBJS_ksudod=	ksudod.o
 

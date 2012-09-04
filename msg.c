@@ -135,12 +135,14 @@ KSUDO_FDOP(msg_fd_read)
     buf     = &data->rbuf;
     sess    = data->session;
 
+    Assert(KssOK(sess));
+
     ksf_read(ksf, buf);
     ke = read_asn1_length(buf, &pkt);
     if (ke == ASN1_OVERRUN) return;
     KRBCHK(ke, "can't read ASN.1 length");
 
-    /* XXX handle pkt */
+    KssCALL(sess, &pkt);
     BufCONSUME(buf, pkt.length);
 }
 
