@@ -29,8 +29,10 @@ krb5_principal      myprinc;
 void            init            ();
 void            ksudod          (int clisock);
 void            read_cmd        (int clisock);
-krb5_ticket *   read_cred       (int clisock);
 void            usage           ();
+
+KSUDO_SOP(sop_read_cred);
+KSUDO_SOP(sop_read_cmd);
 
 void
 init ()
@@ -47,35 +49,55 @@ init ()
     KRBCHK(krb5_sname_to_principal(k5ctx, myname, KSUDO_SRV,
             KRB5_NT_SRV_HST, &myprinc),
         "can't build server principal");
-}
-
-void
-ksudod (int clisock)
-{
-    dKRBCHK;
-    krb5_data       packet;
-    krb5_ticket     *tkt;
-    KSUDO_CMD       *cmd;
 
     KRBCHK(krb5_auth_con_init(k5ctx, &k5auth),
         "can't create auth context");
-
-    tkt = read_cred(clisock);
-    read_cmd(clisock);
-
-    krb5_free_ticket(k5ctx, tkt);
-    krb5_auth_con_free(k5ctx, k5auth);
 }
 
-void
-read_cmd (int clisock)
+KSUDO_SOP(sop_read_cred)
 {
-    dRV;
+    dKRBCHK;
+    krb5_ticket     *tkt;
+    krb5_principal  cliprinc;
+    char            *cliname;
+    krb5_data       *aprep;
+
+#define HEX(n) (int)((uchar*)pkt->data)[n]
+    debug("AP-REQ pkt [%lx] length [%ld], start [%x%x%x%x%x%x%x%x%x]",
+        (long)pkt, (long)pkt->length, 
+        HEX(0), HEX(1), HEX(2), HEX(3), HEX(4), HEX(5),
+        HEX(6), HEX(7), HEX(8));
+#undef HEX
+
+    KRBCHK(krb5_rd_req(k5ctx, &k5auth, pkt, myprinc, 
+            k5kt, NULL, &tkt),
+        "can't verify AP-REQ");
+
+    KRBCHK(krb5_ticket_get_client(k5ctx, tkt, &cliprinc),
+        "can't read client principal from ticket");
+    KRBCHK(krb5_unparse_name(k5ctx, cliprinc, &cliname),
+        "can't unparse client principal");
+
+    debug("Got a ticket from [%s]", cliname);
+
+    free(cliname);
+    krb5_free_principal(k5ctx, cliprinc);
+
+    New(aprep, 1);
+    KRBCHK(krb5_mk_rep(k5ctx, k5auth, aprep),
+        "can't build AP-REP");
+
+    MbfPUSH(KssMBUF(sess), aprep);
+    KssNEXT(sess, sop_read_cmd);
+}
+
+KSUDO_SOP(sop_read_cmd)
+{
     KSUDO_MSG   msg;
     KSUDO_CMD   *cmd;
     int         i;
 
-    read_msg(clisock, &msg); 
+    read_msg(pkt, &msg); 
     if (msg.element != choice_KSUDO_MSG_cmd)
         errx(EX_PROTOCOL, "KSUDO-MSG is not a KSUDO-CMD");
 
@@ -89,36 +111,26 @@ read_cmd (int clisock)
     free_KSUDO_MSG(&msg);
 }
 
-krb5_ticket *
-read_cred (int clisock)
+void
+create_listen_socks (char *host)
 {
-    dKRBCHK;
-    krb5_data       packet;
-    krb5_ticket     *tkt;
-    krb5_principal  cliprinc;
-    char            *cliname;
+    dRV;
+    int                 sck;
+    ksudo_fddata_listen *ldata;
 
-    read_packet(clisock, &packet);
-    KRBCHK(krb5_rd_req(k5ctx, &k5auth, &packet, myprinc, k5kt, NULL, &tkt),
-        "can't verify AP-REQ");
-    krb5_data_free(&packet);
+    if (!host) {
+        New(host, MAXHOSTNAMELEN);
+        SYSCHK(gethostname(host, MAXHOSTNAMELEN),
+            "can't get my hostname");
+    }
 
-    KRBCHK(krb5_mk_rep(k5ctx, k5auth, &packet),
-        "can't build AP-REP");
-    send_packet(clisock, &packet);
-    krb5_data_free(&packet);
+    sck = create_socket(host, AI_PASSIVE|AI_CANONNAME, &myname);
+    SYSCHK(listen(sck, 10), "can't listen on socket");
+    debug("got listen socket [%d] for [%s]", sck, myname);
 
-    KRBCHK(krb5_ticket_get_client(k5ctx, tkt, &cliprinc),
-        "can't read client principal from ticket");
-    KRBCHK(krb5_unparse_name(k5ctx, cliprinc, &cliname),
-        "can't unparse client principal");
-
-    debug("Got a ticket from [%s]", cliname);
-
-    free(cliname);
-    krb5_free_principal(k5ctx, cliprinc);
-
-    return tkt;
+    NewZ(ldata, 1);
+    ldata->startop = sop_read_cred;
+    ksf_open(sck, KSUDO_FD_READ, KSFt(listen), ldata);
 }
 
 void
@@ -130,30 +142,12 @@ usage ()
 int
 main (int argc, char **argv)
 {
-    dRV;
-    char    *host;
-    int     srvsock, clisock;
-
     if (argc > 2) usage();
-    if (argc > 1)
-        host = argv[1];
-    else {
-        New(host, MAXHOSTNAMELEN);
-        SYSCHK(gethostname(host, MAXHOSTNAMELEN),
-            "can't get my hostname");
-    }
-
-    srvsock = create_socket(host, AI_PASSIVE|AI_CANONNAME, &myname);
-    SYSCHK(listen(srvsock, 10), "can't listen on socket");
-    debug("got listen socket [%d] for [%s]", srvsock, myname);
 
     init();
+    create_listen_socks(argc > 1 ? argv[1] : NULL);
 
-    while (1) {
-        SYSCHK(clisock = accept(srvsock, NULL, 0),
-            "can't accept connection");
-        ksudod(clisock);
-    }
+    ioloop();
 
     krb5_free_context(k5ctx);
 }

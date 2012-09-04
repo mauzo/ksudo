@@ -16,10 +16,18 @@
 krb5_context        k5ctx;
 krb5_auth_context   k5auth;
 
+/* the client has just one session */
+int             nsessions = 1;
+ksudo_session   session;
+ksudo_session   *sessions = &session;
+
+char    *usr, **cmdv;
+int     cmdc;
+
 void    get_creds   (const char *host, krb5_creds *cred);
 void    init        ();
-void    send_cmd    (int sock, const char *usr, int cmdc, char **cmdv);
-void    send_creds  (int sock, krb5_creds *cred);
+void    send_cmd    ();
+void    send_creds  (krb5_creds *cred);
 void    usage       ();
 
 void
@@ -97,7 +105,7 @@ get_creds (const char *host, krb5_creds *cred)
 }
 
 void
-send_cmd (int sock, const char *user, int cmdc, char **cmdv)
+send_cmd ()
 {
     dRV; dKRBCHK;
     KSUDO_MSG   msg, decode;
@@ -108,8 +116,8 @@ send_cmd (int sock, const char *user, int cmdc, char **cmdv)
 
     msg.element         = choice_KSUDO_MSG_cmd;
     cmd = &msg.u.cmd;
-    cmd->user.length    = strlen(user);
-    cmd->user.data      = strdup(user);
+    cmd->user.length    = strlen(usr);
+    cmd->user.data      = strdup(usr);
     cmd->env.len        = 0;
     cmd->env.val        = NULL;
     cmd->cmd.len        = cmdc;
@@ -120,28 +128,56 @@ send_cmd (int sock, const char *user, int cmdc, char **cmdv)
         cmd->cmd.val[i].data    = strdup(cmdv[i]);
     }
 
-    send_msg(sock, &msg);
+    write_msg(KssMBUF(0), &msg);
+    free_KSUDO_MSG(&msg);
 }
 
 void
-send_creds (int sock, krb5_creds *cred)
+send_creds (krb5_creds *cred)
 {
     dKRBCHK;
-    krb5_data               packet;
+    krb5_data               *packet;
+
+    New(packet, 1);
+    KRBCHK(krb5_mk_req_extended(k5ctx, &k5auth, 0, NULL, cred, packet),
+        "can't build AP-REQ");
+
+#define HEX(x) (int)((uchar *)packet->data)[x]
+    debug("AP-REQ length [%ld] start [%x%x%x%x%x%x%x%x%x]",
+        (long)packet->length, HEX(0), HEX(1), HEX(2), HEX(3), HEX(4),
+        HEX(5), HEX(6), HEX(7), HEX(8));
+#undef HEX
+    MbfPUSH(KssMBUF(0), packet);
+}
+
+KSUDO_SOP(sop_read_creds)
+{
+    dKRBCHK;
     krb5_ap_rep_enc_part    *ep;
 
-    KRBCHK(krb5_mk_req_extended(k5ctx, &k5auth, 0, NULL, cred, &packet),
-        "can't build AP-REQ");
-    send_packet(sock, &packet);
-    krb5_data_free(&packet);
+#define HEX(x) (int)((uchar *)pkt->data)[x]
+    debug("AP-REP length [%ld] start [%x%x%x%x%x%x%x%x%x]",
+        (long)pkt->length, HEX(0), HEX(1), HEX(2), HEX(3), HEX(4),
+        HEX(5), HEX(6), HEX(7), HEX(8));
+#undef HEX
 
-    read_packet(sock, &packet);
-    KRBCHK(krb5_rd_rep(k5ctx, k5auth, &packet, &ep),
+    KRBCHK(krb5_rd_rep(k5ctx, k5auth, pkt, &ep),
         "can't read AP-REP");
-    krb5_data_free(&packet);
     krb5_free_ap_rep_enc_part(k5ctx, ep);
 
     debug("done AP exchange");
+
+    send_cmd();
+}
+
+void
+create_client_sock(const char *srv, char **canon)
+{
+    int sock;
+
+    sock = create_socket(srv, AI_CANONNAME, canon);
+    debug("create_socket: [%d]", sock);
+    kss_init(0, sock, sop_read_creds);
 }
 
 void
@@ -154,8 +190,8 @@ int
 main (int argc, char **argv)
 {
     dKRBCHK;
-    char                *srv, *canon, *usr, **cmdv;
-    int                 cmdc, sock;
+    char                *srv, *canon;
+    int                 sock;
     krb5_creds          cred;
 
     if (argc < 4) usage();
@@ -166,15 +202,15 @@ main (int argc, char **argv)
 
     init();
 
-    sock = create_socket(srv, AI_CANONNAME, &canon);
+    create_client_sock(srv, &canon);
 
     get_creds(canon, &cred);
     free(canon);
 
-    send_creds(sock, &cred);
+    send_creds(&cred);
     krb5_free_cred_contents(k5ctx, &cred);
 
-    send_cmd(sock, usr, cmdc, cmdv);
+    ioloop();
 
     krb5_free_context(k5ctx);
 }
