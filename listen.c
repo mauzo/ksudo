@@ -50,7 +50,7 @@ KSUDO_FDOP(listen_fd_read)
             sessions[j].state = KSSs_NONE;
     }
 
-    kss_init(i, cli, data->startop);
+    KssINIT(i, server, cli, data->startop);
 }
 
 ksudo_fdops ksudo_fdops_listen = {

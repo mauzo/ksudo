@@ -77,12 +77,14 @@ read_asn1_length (ksudo_buf *buf, krb5_data *pkt)
 }
 
 int
-write_msg (ksudo_msgbuf *buf, KSUDO_MSG *msg)
+write_msg (int sess, KSUDO_MSG *msg)
 {
     dKRBCHK;
-    size_t      len, outlen;
-    krb5_data   der, *packet;
+    ksudo_msgbuf    *buf;
+    size_t          len, outlen;
+    krb5_data       der, *packet;
 
+    buf = KssMBUF(sess);
     if (!MbfAVAIL(buf)) return 0;
 
     len = length_KSUDO_MSG(msg);
@@ -99,7 +101,7 @@ write_msg (ksudo_msgbuf *buf, KSUDO_MSG *msg)
         Panic("DER-encoding came out the wrong length");
 
     New(packet, 1);
-    KRBCHK(krb5_mk_priv(k5ctx, k5auth, &der, packet, NULL),
+    KRBCHK(krb5_mk_priv(k5ctx, KssK5A(sess), &der, packet, NULL),
         "can't encrypt KSUDO-MSG");
     krb5_data_free(&der);
 
@@ -108,13 +110,13 @@ write_msg (ksudo_msgbuf *buf, KSUDO_MSG *msg)
 }
 
 int
-read_msg (krb5_data *pkt, KSUDO_MSG *msg)
+read_msg (int sess, krb5_data *pkt, KSUDO_MSG *msg)
 {
     dKRBCHK;
     size_t      len;
     krb5_data   der;
 
-    KRBCHK(krb5_rd_priv(k5ctx, k5auth, pkt, &der, NULL),
+    KRBCHK(krb5_rd_priv(k5ctx, KssK5A(sess), pkt, &der, NULL),
         "can't decrypt KRB5-PRIV");
 
     KRBCHK(decode_KSUDO_MSG(der.data, der.length, msg, NULL),

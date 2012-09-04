@@ -30,7 +30,6 @@
 #define KSUDO_BUFSIZ    10240
 
 extern krb5_context         k5ctx;
-extern krb5_auth_context    k5auth;
 
 typedef unsigned char       uchar;
 
@@ -152,7 +151,7 @@ typedef struct {
         } \
     } while (0)
 
-typedef void (*ksudo_fdop)(int, void *);
+typedef void (*ksudo_fdop)(int);
 typedef struct {
     ksudo_fdop  open;
     ksudo_fdop  close;
@@ -161,8 +160,8 @@ typedef struct {
     ksudo_fdop  unblock;
 } ksudo_fdops, *KSF_TYPE;
 
-#define KSUDO_FDOP(n)   static void n (int ksf, void *vdata)
-#define dFDOP(t)        ksudo_fddata_ ## t *data = vdata
+#define KSUDO_FDOP(n)   static void n (int ksf)
+#define dFDOP(t)        ksudo_fddata_ ## t *data = KsfDATA(ksf, t)
 #define ckFDOP(t)       Assert(KsfIS(ksf, t))
 
 typedef struct {
@@ -190,7 +189,7 @@ typedef struct {
  * this will need to change to a (?:) expression.
  */
 #define KsfCALLOP(f, o) \
-    if (KsfHASOP(f, o)) KsfL(f).ops->o((f), KsfDATAv(f))
+    if (KsfHASOP(f, o)) KsfL(f).ops->o(f)
 
 #define KsfPOLL(f)  (pollfds[(f)])
 #define KsfFD(f)    (KsfPOLL(f).fd)
@@ -198,10 +197,15 @@ typedef struct {
 typedef void (*ksudo_sop) (int, krb5_data *);
 
 #define KSUDO_SOP(n)    static void n (int sess, krb5_data *pkt)
+/* The ksudo_session_data typedef must be provided by the app */
+#define dKSSOP(t)       ksudo_sdata_ ## t *data = KssDATA(sess, t)
 #define KSSs_NONE       ((ksudo_sop)0)
 
 typedef struct {
     ksudo_sop   state;
+    void        *data;
+
+    krb5_auth_context   k5a;
 
     /* these are ksfds, not OS fds */
     int     msgfd;
@@ -215,8 +219,20 @@ typedef struct {
 #define KssCALL(s, d)   (KssSTATE(s)((s), (d)))
 #define KssNEXT(s, f)   (KssL(s).state = (f))
 
+#define KssDATAv(s)     (KssL(s).data)
+#define KssDATA(s, t)   ((ksudo_sdata_ ## t *)KssDATAv(s))
+#define KssK5A(s)       (KssL(s).k5a)
+
 #define KssMSGFD(s, f)  (KssL(s).msgfd = (f))
 #define KssMBUF(s)      (&KsfDATA(KssL(s).msgfd, msg)->wbuf)
+
+#define KssINIT(s, t, f, o) \
+    do { \
+        ksudo_sdata_ ## t *__sdata; \
+        Assert(!KssOK(s)); \
+        NewZ(__sdata, 1); \
+        kss_init((s), (f), (o), (void *)(__sdata)); \
+    } while (0)
 
 typedef struct {
    ksudo_sop    startop;
@@ -242,6 +258,16 @@ typedef struct {
     size_t      nextwnd;
 } ksudo_fddata_data;
 
+typedef struct {
+    char    *usr;
+    int     cmdc;
+    char    **cmdv;
+} ksudo_sdata_client;
+
+typedef struct {
+    krb5_ticket         *tkt;
+} ksudo_sdata_server;
+
 extern int              nksfds;
 extern ksudo_fd         *ksfds;
 extern struct pollfd    *pollfds;
@@ -263,11 +289,11 @@ void    ksf_write       (int ix, ksudo_buf *buf);
 void    ioloop          ();
 
 /* msg.c */
-int     read_msg        (krb5_data *pkt, KSUDO_MSG *msg);
-int     write_msg       (ksudo_msgbuf *buf, KSUDO_MSG *msg);
+int     read_msg        (int sess, krb5_data *pkt, KSUDO_MSG *msg);
+int     write_msg       (int sess, KSUDO_MSG *msg);
 
 /* session.c */
-void    kss_init        (int sess, int fd, ksudo_sop start);
+void    kss_init        (int sess, int fd, ksudo_sop start, void *data);
 
 /* sock.c */
 int     create_socket   (const char *host, int flags, char **canon);

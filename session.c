@@ -11,8 +11,9 @@
 #include "ksudo.h"
 
 void
-kss_init (int sess, int fd, ksudo_sop start)
+kss_init (int sess, int fd, ksudo_sop start, void *data)
 {
+    dKRBCHK;
     ksudo_fddata_msg    *mdata;
     int                 ksf;
    
@@ -23,7 +24,11 @@ kss_init (int sess, int fd, ksudo_sop start)
     ksf = ksf_open(fd, KSUDO_FD_RDWR, KSFt(msg), mdata);
     KssMSGFD(sess, ksf);
     KssNEXT(sess, start);
-    KssL(sess).datafds = NULL;
+    KssL(sess).datafds  = NULL;
+    KssL(sess).data     = data;
+    
+    KRBCHK(krb5_auth_con_init(k5ctx, &KssK5A(sess)),
+        "can't allocate auth context");
    
     debug("kss_init session [%d] mdata [0x%lx] ksf [%d]",
         sess, mdata, ksf);

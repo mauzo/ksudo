@@ -14,20 +14,16 @@
 #include "ksudo.h"
 
 krb5_context        k5ctx;
-krb5_auth_context   k5auth;
 
 /* the client has just one session */
 int             nsessions = 1;
 ksudo_session   session;
 ksudo_session   *sessions = &session;
 
-char    *usr, **cmdv;
-int     cmdc;
-
 void    get_creds   (const char *host, krb5_creds *cred);
 void    init        ();
 void    send_cmd    ();
-void    send_creds  (krb5_creds *cred);
+void    send_creds  (krb5_auth_context *k5a, krb5_creds *cred);
 void    usage       ();
 
 void
@@ -37,9 +33,6 @@ init ()
 
     if (ke = krb5_init_context(&k5ctx))
         errx(EX_UNAVAILABLE, "can't create krb5 context");
-
-    KRBCHK(krb5_auth_con_init(k5ctx, &k5auth),
-        "can't create auth context");
 }
 
 void
@@ -105,7 +98,7 @@ get_creds (const char *host, krb5_creds *cred)
 }
 
 void
-send_cmd ()
+send_cmd (char *usr, int cmdc, char **cmdv)
 {
     dRV; dKRBCHK;
     KSUDO_MSG   msg, decode;
@@ -128,18 +121,18 @@ send_cmd ()
         cmd->cmd.val[i].data    = strdup(cmdv[i]);
     }
 
-    write_msg(KssMBUF(0), &msg);
+    write_msg(0, &msg);
     free_KSUDO_MSG(&msg);
 }
 
 void
-send_creds (krb5_creds *cred)
+send_creds (krb5_auth_context *k5a, krb5_creds *cred)
 {
     dKRBCHK;
     krb5_data               *packet;
 
     New(packet, 1);
-    KRBCHK(krb5_mk_req_extended(k5ctx, &k5auth, 0, NULL, cred, packet),
+    KRBCHK(krb5_mk_req_extended(k5ctx, k5a, 0, NULL, cred, packet),
         "can't build AP-REQ");
 
 #define HEX(x) (int)((uchar *)packet->data)[x]
@@ -152,6 +145,7 @@ send_creds (krb5_creds *cred)
 
 KSUDO_SOP(sop_read_creds)
 {
+    dKSSOP(client);
     dKRBCHK;
     krb5_ap_rep_enc_part    *ep;
 
@@ -161,13 +155,13 @@ KSUDO_SOP(sop_read_creds)
         HEX(5), HEX(6), HEX(7), HEX(8));
 #undef HEX
 
-    KRBCHK(krb5_rd_rep(k5ctx, k5auth, pkt, &ep),
+    KRBCHK(krb5_rd_rep(k5ctx, KssK5A(sess), pkt, &ep),
         "can't read AP-REP");
     krb5_free_ap_rep_enc_part(k5ctx, ep);
 
     debug("done AP exchange");
 
-    send_cmd();
+    send_cmd(data->usr, data->cmdc, data->cmdv);
 }
 
 void
@@ -177,7 +171,7 @@ create_client_sock(const char *srv, char **canon)
 
     sock = create_socket(srv, AI_CANONNAME, canon);
     debug("create_socket: [%d]", sock);
-    kss_init(0, sock, sop_read_creds);
+    KssINIT(0, client, sock, sop_read_creds);
 }
 
 void
@@ -191,23 +185,26 @@ main (int argc, char **argv)
 {
     dKRBCHK;
     char                *srv, *canon;
+    ksudo_sdata_client  *sdata;
     int                 sock;
     krb5_creds          cred;
 
     if (argc < 4) usage();
     srv = argv[1];
-    usr = argv[2];
-    cmdv = argv + 3;
-    cmdc = argc - 3;
 
     init();
 
     create_client_sock(srv, &canon);
 
+    sdata = KssDATA(0, client);
+    sdata->usr  = argv[2];
+    sdata->cmdv = argv + 3;
+    sdata->cmdc = argc - 3;
+
     get_creds(canon, &cred);
     free(canon);
 
-    send_creds(&cred);
+    send_creds(&KssK5A(0), &cred);
     krb5_free_cred_contents(k5ctx, &cred);
 
     ioloop();

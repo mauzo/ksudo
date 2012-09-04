@@ -22,7 +22,6 @@
 
 char                *myname;
 krb5_context        k5ctx;
-krb5_auth_context   k5auth;
 krb5_keytab         k5kt;
 krb5_principal      myprinc;
 
@@ -49,15 +48,12 @@ init ()
     KRBCHK(krb5_sname_to_principal(k5ctx, myname, KSUDO_SRV,
             KRB5_NT_SRV_HST, &myprinc),
         "can't build server principal");
-
-    KRBCHK(krb5_auth_con_init(k5ctx, &k5auth),
-        "can't create auth context");
 }
 
 KSUDO_SOP(sop_read_cred)
 {
+    dKSSOP(server);
     dKRBCHK;
-    krb5_ticket     *tkt;
     krb5_principal  cliprinc;
     char            *cliname;
     krb5_data       *aprep;
@@ -69,11 +65,11 @@ KSUDO_SOP(sop_read_cred)
         HEX(6), HEX(7), HEX(8));
 #undef HEX
 
-    KRBCHK(krb5_rd_req(k5ctx, &k5auth, pkt, myprinc, 
-            k5kt, NULL, &tkt),
+    KRBCHK(krb5_rd_req(k5ctx, &KssK5A(sess), pkt, myprinc, 
+            k5kt, NULL, &data->tkt),
         "can't verify AP-REQ");
 
-    KRBCHK(krb5_ticket_get_client(k5ctx, tkt, &cliprinc),
+    KRBCHK(krb5_ticket_get_client(k5ctx, data->tkt, &cliprinc),
         "can't read client principal from ticket");
     KRBCHK(krb5_unparse_name(k5ctx, cliprinc, &cliname),
         "can't unparse client principal");
@@ -84,7 +80,7 @@ KSUDO_SOP(sop_read_cred)
     krb5_free_principal(k5ctx, cliprinc);
 
     New(aprep, 1);
-    KRBCHK(krb5_mk_rep(k5ctx, k5auth, aprep),
+    KRBCHK(krb5_mk_rep(k5ctx, KssK5A(sess), aprep),
         "can't build AP-REP");
 
     MbfPUSH(KssMBUF(sess), aprep);
@@ -97,7 +93,7 @@ KSUDO_SOP(sop_read_cmd)
     KSUDO_CMD   *cmd;
     int         i;
 
-    read_msg(pkt, &msg); 
+    read_msg(sess, pkt, &msg); 
     if (msg.element != choice_KSUDO_MSG_cmd)
         errx(EX_PROTOCOL, "KSUDO-MSG is not a KSUDO-CMD");
 
