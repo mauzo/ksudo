@@ -7,6 +7,7 @@
 #define __config_h__
 
 #define DEBUG
+#define WITH_REUSEADDR
 
 #define HAVE_BLOCK_EXPR
 

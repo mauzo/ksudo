@@ -56,6 +56,12 @@ create_socket (const char *host, int flags, char **canon)
         "can't create socket");
 
     if (flags & AI_PASSIVE) {
+#ifdef WITH_REUSEADDR
+        int one = 1;
+
+        SYSCHK(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)),
+            "can't set SO_REUSEADDR");
+#endif
         SYSCHK(bind(sock, res->ai_addr, res->ai_addrlen),
             "can't bind socket");
     }
