@@ -18,8 +18,7 @@ ksudo_fd        *ksfds;
 struct pollfd   *pollfds;
 
 int
-ksf_open (int fd, KSUDO_FD_MODE mode, ksudo_fdops *ops, void *data, 
-            int hasbuf)
+ksf_open (int fd, KSUDO_FD_MODE mode, KSF_TYPE type, void *data)
 {
     dRV;
     int             i;
@@ -63,20 +62,17 @@ ksf_open (int fd, KSUDO_FD_MODE mode, ksudo_fdops *ops, void *data,
     pf->events      = mode_events[mode];
 
     bzero(ksf, sizeof *ksf);
-    ksf->read       = !!(pf->events & POLLIN);
-    ksf->write      = !!(pf->events & POLLOUT);
-    ksf->ops        = ops;
+    ksf->ops        = type;
     ksf->data       = data;
-
-    if (hasbuf) {
-        if (KsfREAD(i))     NewBuf(ksf->rbuf);
-        if (KsfWRITE(i))    NewBuf(ksf->wbuf);
-    }
 
     SYSCHK(fdflags = fcntl(fd, F_GETFL, 0),
         "can't read fd flags");
     SYSCHK(fcntl(fd, F_SETFL, fdflags | O_NONBLOCK),
         "can't set fd nonblocking");
+
+    KsfCALLOP(i, open);
+    debug("ksf_open fd [%d] ops [%lx] data [%lx]",
+        fd, type, data);
 
     return i;
 }
@@ -84,44 +80,42 @@ ksf_open (int fd, KSUDO_FD_MODE mode, ksudo_fdops *ops, void *data,
 void
 ksf_close (int ix)
 {
-    ksudo_fd    *ksf;
-
-    ksf = &KsfL(ix);
-    Free(ksf->rbuf);
-    Free(ksf->wbuf);
-    Free(ksf->data);
-
+    debug("ksf_close [%d]", ix);
+    KsfCALLOP(ix, close);
+    Free(KsfDATAv(ix));
     KsfPOLL(ix).fd  = -1;
 }
 
 void
-ksf_read (int ix)
+ksf_read (int ix, ksudo_buf *buf)
 {
     dRV;
     int             fd      = KsfFD(ix);
-    ksudo_buf       *buf    = KsfRBUF(ix);
-
-    Assert(KsfREAD(ix));
 
     BufENSURE(buf, KSUDO_BUFSIZ);
     if (!BufFREE(buf)) return;
 
     rv = read(fd, BufEND(buf), BufFREE(buf));
+    debug("ksf_read [%d] [%lx] [%ld] -> [%d]", 
+        fd, BufEND(buf), BufFREE(buf), rv);
 
     if (rv == EAGAIN) return;
     SYSCHK(rv, "read failed");
+
+    if (rv == 0) {
+        debug("ksf_read: EOF on [%d]", ix);
+        ksf_close(ix);
+    }
 
     BufEXTEND(buf, rv);
 }
 
 void
-ksf_write (int ix)
+ksf_write (int ix, ksudo_buf *buf)
 {
     dRV;
     int             fd      = KsfFD(ix);
-    ksudo_buf       *buf    = KsfWBUF(ix);
 
-    Assert(KsfWRITE(ix));
     if (!BufFILL(buf)) return;
 
     rv = write(fd, BufSTART(buf), BufFILL(buf));
@@ -145,8 +139,8 @@ ioloop ()
         for (i = 0; i < nksfds; i++) {
             short   ev  = KsfPOLL(i).revents;
 
-            if (ev & POLLIN)    KsfCALLOP(i, read_ready);
-            if (ev & POLLOUT)   KsfCALLOP(i, write_ready);
+            if (ev & POLLIN)    KsfCALLOP(i, read);
+            if (ev & POLLOUT)   KsfCALLOP(i, write);
         }
     }
 }

@@ -145,68 +145,83 @@ typedef struct {
         } \
     } while (0)
 
+typedef void (*ksudo_fdop)(int, void *);
 typedef struct {
-    void    (*read_ready)   (int, void *);
-    void    (*write_ready)  (int, void *);
-    int     (*try_unblock)  (int, void *);
-} ksudo_fdops;
+    ksudo_fdop  open;
+    ksudo_fdop  close;
+    ksudo_fdop  read;
+    ksudo_fdop  write;
+    ksudo_fdop  unblock;
+} ksudo_fdops, *KSF_TYPE;
+
+#define KSUDO_FDOP(n)   static void n (int ksf, void *vdata)
+#define dFDOP(t)        ksudo_fddata_ ## t *data = vdata
+#define ckFDOP(t)       Assert(KsfIS(ksf, t))
 
 typedef struct {
-    unsigned    read        : 1;
-    unsigned    write       : 1;
     unsigned    blocking    : 1;
     unsigned    wndsent     : 1;
 
     ksudo_fdops     *ops;
     void            *data;
 
-    ksudo_buf       *rbuf;
-    ksudo_buf       *wbuf;
     /* the ix of the ksfd we are blocked on */
     int             blocked;
 } ksudo_fd;
 
 #define KsfL(f)     (ksfds[(f)])
 
-#define KsfREAD(f)  (KsfL(f).read)
-#define KsfWRITE(f) (KsfL(f).write)
+#define KsfTYPE(f)  (KsfL(f).ops)
+#define KSFt(t)     (&ksudo_fdops_ ## t)
+#define KsfIS(f, t) (KsfTYPE(f) == KSFt(t))
 
+#define KsfDATAv(f)     (KsfL(f).data)
+#define KsfDATA(f, t) \
+    AssertXX(KsfIS(f, t), ((ksudo_fddata_ ## t *)KsfDATAv(f)))
 #define KsfHASOP(f, o)  (KsfL(f).ops && KsfL(f).ops->o)
 /* This assumes ops are always called in void context. If that changes
  * this will need to change to a (?:) expression.
  */
 #define KsfCALLOP(f, o) \
-    if (KsfHASOP(f, o)) KsfL(f).ops->o((f), KsfL(f).data)
-
-#define KsfRBUF(f)  AssertX(KsfL(f).rbuf)
-#define KsfWBUF(f)  AssertX(KsfL(f).wbuf)
+    if (KsfHASOP(f, o)) KsfL(f).ops->o((f), KsfDATAv(f))
 
 #define KsfPOLL(f)  (pollfds[(f)])
 #define KsfFD(f)    (KsfPOLL(f).fd)
 
 typedef struct {
-    int     session;
+    int             session;
+    ksudo_buf       rbuf;
+    ksudo_msgbuf    wbuf;
 } ksudo_fddata_msg;
 
 typedef struct {
-    int     session;
-    int     fd;
+    int         session;
+    /* our logical fd number within the session */
+    int         fd;
+
+    ksudo_buf   *rbuf;
+    ksudo_buf   *wbuf;
+
     /* wbuf->start last time we sent a window update */
-    uchar   *lastwnd;
+    uchar       *lastwnd;
     /* the maximum size of our next packet */
-    size_t  nextwnd;
+    size_t      nextwnd;
 } ksudo_fddata_data;
 
 extern int              nksfds;
 extern ksudo_fd         *ksfds;
 extern struct pollfd    *pollfds;
 
+extern ksudo_fdops
+    ksudo_fdops_msg,
+    ksudo_fdops_data;
+
 /* io.c */
-int     ksf_open        (int fd, KSUDO_FD_MODE mode, ksudo_fdops *ops, 
-                            void *data, int hasbuf);
+int     ksf_open        (int fd, KSUDO_FD_MODE mode, KSF_TYPE type, 
+                            void *data);
 void    ksf_close       (int ix);
-void    ksf_read        (int ix);
-void    ksf_write       (int ix);
+void    ksf_read        (int ix, ksudo_buf *buf);
+void    ksf_write       (int ix, ksudo_buf *buf);
 void    ioloop          ();
 
 /* msg.c */

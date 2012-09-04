@@ -123,3 +123,51 @@ read_msg (krb5_data *pkt, KSUDO_MSG *msg)
 
     return 1;
 }
+
+KSUDO_FDOP(msg_fd_read)
+{
+    dFDOP(msg);  dKRBCHK;
+    ksudo_buf   *buf;
+    int         sess;
+    krb5_data   pkt;
+
+    ckFDOP(msg);
+    buf     = &data->rbuf;
+    sess    = data->session;
+
+    ksf_read(ksf, buf);
+    ke = read_asn1_length(buf, &pkt);
+    if (ke == ASN1_OVERRUN) return;
+    KRBCHK(ke, "can't read ASN.1 length");
+
+    /* XXX handle pkt */
+    BufCONSUME(buf, pkt.length);
+}
+
+KSUDO_FDOP(msg_fd_write)
+{
+    dFDOP(msg);  dRV;
+    ksudo_msgbuf    *b;
+    struct iovec    iov[2];
+
+    ckFDOP(msg);
+    b   = &data->wbuf;
+
+    if (!MbfLEFT(b)) return;
+
+    iov[0].iov_base = MbfPTR(b);
+    iov[0].iov_len  = MbfPTRl(b);
+    iov[1].iov_base = MbfNEXTp(b);
+    iov[1].iov_len  = MbfNEXTl(b);
+    rv = writev(KsfFD(ksf), iov, MbfNEXT(b) ? 2 : 1);
+    
+    if (rv == EAGAIN) return;
+    SYSCHK(rv, "can't write to msg fd");
+
+    MbfCONSUME(b, rv);
+}
+
+ksudo_fdops ksudo_fdops_msg = {
+    .read       = msg_fd_read,
+    .write      = msg_fd_write
+};
