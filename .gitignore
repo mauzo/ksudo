@@ -1,1 +1,4 @@
 ksudo.keytab
+ksudo
+ksudod
+*.o
