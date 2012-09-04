@@ -1,0 +1,7 @@
+#!/bin/sh
+
+cat <<C | cpp -E | sed -ne'/<expand>/,$p'
+#include "ksudo.h"
+#line 1 "<expand>"
+$1
+C
