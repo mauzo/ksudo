@@ -15,17 +15,18 @@ LIBS_krb5!=	krb5-config --libs krb5
 LIBS+=		${LIBS_krb5}
 
 PROGS=		ksudo ksudod
-OBJS_ksudo=	ksudo.o asn1/asn1.o io.o sock.o
-OBJS_ksudod=	ksudod.o asn1/asn1.o io.o sock.o
+OBJS_all=	asn1/asn1.o io.o msg.o sock.o
+OBJS_ksudo=	ksudo.o
+OBJS_ksudod=	ksudod.o
 
-.for p in ${PROGS}
+.for p in ${PROGS} all
 OBJS+=		${OBJS_${p}}
 .endfor
 
 all: ${PROGS}
 
 .for p in ${PROGS}
-${p}: ${OBJS_${p}}
+${p}: ${OBJS_${p}} ${OBJS_all}
 	${CC} -o ${.TARGET} ${LDFLAGS} ${.ALLSRC} ${LIBS}
 
 .endfor

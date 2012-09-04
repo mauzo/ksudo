@@ -97,6 +97,55 @@ typedef struct {
     } while (0)
 
 typedef struct {
+    krb5_data   *cur;
+    void        *ptr;
+    krb5_data   *next;
+} ksudo_msgbuf;
+
+#define MbfCUR(b)       ((b)->cur)
+#define MbfCURp(b)      (MbfCUR(b) ? MbfCUR(b)->data : NULL)
+#define MbfCURl(b)      (MbfCUR(b) ? MbfCUR(b)->length : 0)
+
+#define MbfPTR(b)       ((b)->ptr)
+#define MbfPTRl(b)      (MbfCURl(b) - (MbfPTR(b) - MbfCURp(b)))
+
+#define MbfNEXT(b)      ((b)->next)
+#define MbfNEXTp(b)     (MbfNEXT(b) ? MbfNEXT(b)->data : NULL)
+#define MbfNEXTl(b)     (MbfNEXT(b) ? MbfNEXT(b)->length : 0)
+#define MbfLEFT(b)      (MbfPTRl(b) + MbfNEXTl(b))
+
+#define MbfAVAIL(b)     (!MbfNEXT(b))
+
+#define NewMsgBuf(b)    NewZ(b, 1)
+
+#define MbfPUSH(b, d) \
+    do { \
+        Assert(MbfAVAIL(b)); \
+        if (MbfCUR(b)) \
+            (b)->next = (d); \
+        else { \
+            (b)->cur = (d); \
+            (b)->ptr = (d)->data; \
+        } \
+    } while (0)
+
+#define MbfCONSUME(b, n) \
+    do { \
+        Assert(MbfCUR(b)); \
+        if ((n) < MbfPTRl(b)) \
+            (b)->ptr += (n); \
+        else { \
+            Assert(MbfLEFT(b) <= (n)); \
+            Assert(MbfNEXT(b) || (n) == MbfPTRl(b)); \
+            \
+            (b)->ptr = MbfNEXTp(b) + ((n) - MbfPTRl(b)); \
+            krb5_free_data(k5ctx, MbfCUR(b)); \
+            (b)->cur = MbfNEXT(b); \
+            (b)->next = NULL; \
+        } \
+    } while (0)
+
+typedef struct {
     void    (*read_ready)   (int, void *);
     void    (*write_ready)  (int, void *);
     int     (*try_unblock)  (int, void *);
@@ -153,17 +202,16 @@ extern ksudo_fd         *ksfds;
 extern struct pollfd    *pollfds;
 
 /* io.c */
-void    read_packet     (int fd, krb5_data *packet);
-void    write_packet    (int fd, krb5_data *packet);
-void    read_msg        (int fd, KSUDO_MSG *msg);
-void    write_msg       (int fd, KSUDO_MSG *msg);
-
 int     ksf_open        (int fd, KSUDO_FD_MODE mode, ksudo_fdops *ops, 
                             void *data, int hasbuf);
 void    ksf_close       (int ix);
 void    ksf_read        (int ix);
 void    ksf_write       (int ix);
 void    ioloop          ();
+
+/* msg.c */
+int     read_msg        (krb5_data *pkt, KSUDO_MSG *msg);
+int     write_msg       (ksudo_msgbuf *buf, KSUDO_MSG *msg);
 
 /* sock.c */
 int     create_socket   (const char *host, int flags, char **canon);
