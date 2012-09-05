@@ -89,19 +89,58 @@ KSUDO_SOP(sop_read_cred)
 
 KSUDO_SOP(sop_read_cmd)
 {
+    dKSSOP(server);
+    dRV;
     KSUDO_MSG   msg;
     KSUDO_CMD   *cmd;
-    int         i;
+    int         ncmd, i;
+    size_t      len = 0;
 
     read_msg(sess, pkt, &msg); 
     if (msg.element != choice_KSUDO_MSG_cmd)
         errx(EX_PROTOCOL, "KSUDO-MSG is not a KSUDO-CMD");
 
-    cmd = &msg.u.cmd;
+    cmd     = &msg.u.cmd;
+    ncmd    = cmd->cmd.len;
+    for (i = 0; i < ncmd; i++)
+        len += cmd->cmd.val[i].length;
 
-    debug("KSUDO-CMD: [%.*s]:", cmd->user.length, cmd->user.data);
-    for (i = 0; i < cmd->cmd.len; i++) {
-        debug("  [%.*s]", cmd->cmd.val[i].length, cmd->cmd.val[i].data);
+    {
+        size_t  tmpl;
+        char    *tmp, *p;
+
+        tmpl = cmd->user.length + 4 + len + ncmd * 2;
+        New(tmp, tmpl);
+        p = tmp;
+        rv = snprintf(p, tmpl, "[%.*s] ",
+            cmd->user.length, cmd->user.data);
+        for (i = 0; i < ncmd; i++) {
+            tmpl -= rv; p += rv;
+            Assert(tmpl > 0);
+            rv = snprintf(p, tmpl, "[%.*s]",
+                cmd->cmd.val[i].length, cmd->cmd.val[i].data);
+        }
+
+        debug("KSUDO-CMD: %s", tmp);
+        Free(tmp);
+    }
+
+    SYSCHK(data->pid = fork(), "fork failed");
+    if (rv == 0) {
+        char **cmdv, *cmds, *p;
+
+        /* the ASN.1 structures are not null-terminated */
+        NewZ(cmds, len + ncmd);
+        NewZ(cmdv, ncmd + 1);
+
+        p = cmds;
+        for (i = 0; i < ncmd; i++) {
+            size_t n = cmd->cmd.val[i].length;
+            Copy(cmd->cmd.val[i].data, p, n);
+            cmdv[i] = p;
+            p += n + 1;
+        }
+        SYSCHK(execvp(cmdv[0], cmdv), "exec failed");
     }
 
     free_KSUDO_MSG(&msg);

@@ -265,7 +265,8 @@ typedef struct {
 } ksudo_sdata_client;
 
 typedef struct {
-    krb5_ticket         *tkt;
+    krb5_ticket     *tkt;
+    pid_t           pid;
 } ksudo_sdata_server;
 
 extern int              nksfds;

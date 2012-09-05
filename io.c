@@ -6,9 +6,11 @@
 
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <sys/wait.h>
 #include <arpa/inet.h>
 
 #include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 
 #include "ksudo.h"
@@ -16,6 +18,14 @@
 int             nksfds      = 0;
 ksudo_fd        *ksfds;
 struct pollfd   *pollfds;
+
+static sig_atomic_t sigchld = 0;
+
+static void 
+sigchld_handler (int sig)
+{
+    sigchld = 1;
+}
 
 int
 ksf_open (int fd, KSUDO_FD_MODE mode, KSF_TYPE type, void *data)
@@ -130,11 +140,37 @@ void
 ioloop ()
 {
     dRV;
-    int         i;
+    int                 i;
+    struct sigaction    sa;
+    
+    sa.sa_handler   = sigchld_handler;
+    sa.sa_flags     = SA_NOCLDSTOP;
+    SYSCHK(sigaction(SIGCHLD, &sa, NULL),
+        "can't set SIGCHLD handler");
 
     while (1) {
         SYSCHK(poll(pollfds, nksfds, INFTIM),
             "poll failed");
+
+        if (sigchld) {
+            /* reset before performing the wait, in case a signal comes
+             * in just after we reset */
+            sigchld = 0;
+            while (1) {
+                int     stat;
+                pid_t   kid;
+
+                kid = waitpid(-1, &stat, WNOHANG);
+                if (kid == 0)               break;
+                if (kid < 0) {
+                    if (errno == ECHILD)    break;
+                    SYSCHK(kid, "wait failed");
+                }
+
+                debug("child exitted: pid [%ld] stat [%d]",
+                    (long)kid, stat);
+            }
+        }
 
         for (i = 0; i < nksfds; i++) {
             short   ev  = KsfPOLL(i).revents;
