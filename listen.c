@@ -7,10 +7,12 @@
  */
 
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/uio.h>
 #include <arpa/inet.h>
 
 #include <fcntl.h>
+#include <netdb.h>
 #include <unistd.h>
 
 #include "ksudo.h"
@@ -22,11 +24,22 @@ KSUDO_FDOP(listen_fd_read)
 {
     dFDOP(listen);  dRV;
     int     cli, i;
+    struct sockaddr_storage raddr;
+    struct sockaddr         *raddrp;
+    socklen_t               raddrlen;
+    char    host[NI_MAXHOST], srv[NI_MAXSERV];
 
     ckFDOP(listen);
 
-    SYSCHK(cli = accept(KsfFD(ksf), NULL, NULL), 
+    raddrp      = (struct sockaddr *)&raddr;
+    raddrlen    = sizeof(raddr);
+    SYSCHK(cli = accept(KsfFD(ksf), raddrp, &raddrlen), 
         "can't accept connection");
+
+    GAICHK(getnameinfo(raddrp, raddrlen, host, sizeof(host),
+            srv, sizeof(srv), 0),
+        "can't resolve client address");
+    debug("accepted connection from [%s]:[%s]", host, srv);
 
     for (i = 0; i < nsessions; i++)
         if (!KssOK(i))
