@@ -25,6 +25,9 @@ OBJS+=		${OBJS_${p}}
 
 all: ${PROGS}
 
+.c.s:
+	${CC} ${CFLAGS} -S ${.IMPSRC}
+
 .for p in ${PROGS}
 ${p}: ${OBJS_${p}} ${OBJS_all}
 	${CC} -o ${.TARGET} ${LDFLAGS} ${.ALLSRC} ${LIBS}
