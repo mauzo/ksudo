@@ -64,8 +64,13 @@ debug(const char *msg, ...) { }
 #  define mem_debug(m, ...) NOOP
 #endif
 
+/* We shouldn't be allocating as much as a MB at a time, so if we do
+ * it's probably a bug. */
+#define MAXALLOC 1024*1024
+
 #define New(v, n) \
     do { \
+        Assert((n) < MAXALLOC); \
         if (!((v) = malloc(sizeof(*(v)) * (n)))) \
             err(EX_UNAVAILABLE, "malloc failed"); \
         mem_debug("New [%lx]", (v)); \
@@ -73,6 +78,7 @@ debug(const char *msg, ...) { }
 
 #define Renew(v, n) \
     do { \
+        Assert((n) < MAXALLOC); \
         mem_debug("Renew [%lx]", (v)); \
         if (!((v) = realloc((v), (n) * sizeof(*(v))))) \
             err(EX_UNAVAILABLE, "malloc failed"); \
