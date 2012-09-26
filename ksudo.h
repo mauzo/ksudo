@@ -316,6 +316,9 @@ extern int              sigwant[];
 extern ksudo_sigop      sigops[];
 extern volatile sig_atomic_t sigcaught[];
 
+/* exec.c */
+void    do_exec         (KSUDO_CMD *cmd, ksudo_sdata_server *data);
+
 /* io.c */
 int     ksf_open        (int fd, KSUDO_FD_MODE mode, KSF_TYPE type, 
                             void *data);
