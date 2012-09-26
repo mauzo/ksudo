@@ -20,6 +20,11 @@ int             nsessions = 1;
 ksudo_session   session;
 ksudo_session   *sessions = &session;
 
+const int               nsigs   = 0;
+int                     sigwant[1];
+ksudo_sigop             sigops[1];
+volatile sig_atomic_t   sigcaught[1];
+
 void    get_creds   (const char *host, krb5_creds *cred);
 void    init        ();
 void    send_cmd    ();

@@ -12,6 +12,7 @@
 #include <err.h>
 #include <errno.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <sysexits.h>
 
@@ -260,6 +261,9 @@ typedef struct {
         kss_init((s), (f), (o), (void *)(__sdata)); \
     } while (0)
 
+typedef void (*ksudo_sigop) ();
+#define KSUDO_SIGOP(n)      void n ()
+
 typedef struct {
    ksudo_sop    startop;
 } ksudo_fddata_listen;
@@ -307,6 +311,11 @@ extern ksudo_fdops
 extern int              nsessions;
 extern ksudo_session    *sessions;
 
+extern const int        nsigs;
+extern int              sigwant[];
+extern ksudo_sigop      sigops[];
+extern volatile sig_atomic_t sigcaught[];
+
 /* io.c */
 int     ksf_open        (int fd, KSUDO_FD_MODE mode, KSF_TYPE type, 
                             void *data);
@@ -321,6 +330,10 @@ int     write_msg       (int sess, KSUDO_MSG *msg);
 
 /* session.c */
 void    kss_init        (int sess, int fd, ksudo_sop start, void *data);
+
+/* signal.c */
+void    setup_signals   ();
+void    handle_signals  ();
 
 /* sock.c */
 int     create_socket   (const char *host, int flags, char **canon);

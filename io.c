@@ -19,14 +19,6 @@ int             nksfds      = 0;
 ksudo_fd        *ksfds;
 struct pollfd   *pollfds;
 
-static sig_atomic_t sigchld = 0;
-
-static void 
-sigchld_handler (int sig)
-{
-    sigchld = 1;
-}
-
 int
 ksf_open (int fd, KSUDO_FD_MODE mode, KSF_TYPE type, void *data)
 {
@@ -148,43 +140,26 @@ void
 ioloop ()
 {
     dRV;
-    int                 i;
-    struct sigaction    sa;
-    
-    sa.sa_handler   = sigchld_handler;
-    sa.sa_flags     = SA_NOCLDSTOP;
-    SYSCHK(sigaction(SIGCHLD, &sa, NULL),
-        "can't set SIGCHLD handler");
+    int i;
+
+    setup_signals();
 
     while (1) {
-        SYSCHK(poll(pollfds, nksfds, INFTIM),
-            "poll failed");
+        handle_signals();
 
-        if (sigchld) {
-            /* reset before performing the wait, in case a signal comes
-             * in just after we reset */
-            sigchld = 0;
-            while (1) {
-                int     stat;
-                pid_t   kid;
+        /* There is a race here: if a signal comes in between the
+         * sigcaughtany check in handle_signals and the start of the
+         * poll syscall, it will not interrupt the poll. AFAICS the only
+         * solution is pselect(2), which means mucking about with signal
+         * masks and select fd_sets.
+         */
 
-                kid = waitpid(-1, &stat, WNOHANG);
-                if (kid == 0)               break;
-                if (kid < 0) {
-                    if (errno == ECHILD)    break;
-                    SYSCHK(kid, "wait failed");
-                }
-
-                debug("child exitted: pid [%ld] stat [%d]",
-                    (long)kid, stat);
-            }
-        }
+        rv = poll(pollfds, nksfds, INFTIM);
+        if (rv < 0 && errno != EINTR) SYSCHK(rv, "poll failed");
 
         for (i = 0; i < nksfds; i++) {
             short   ev  = KsfPOLL(i).revents;
             KsfPOLL(i).revents = 0;
-
-            debug("poll [%d] [%d]", i, (int)ev);
 
             if (ev & POLLIN)    KsfCALLOP(i, read);
             if (ev & POLLOUT)   KsfCALLOP(i, write);

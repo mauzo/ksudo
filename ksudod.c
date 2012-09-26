@@ -10,6 +10,7 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 
 #include <limits.h>
@@ -24,6 +25,13 @@ char                *myname;
 krb5_context        k5ctx;
 krb5_keytab         k5kt;
 krb5_principal      myprinc;
+
+KSUDO_SIGOP(sigop_chld);
+
+const int               nsigs       = 1;
+int                     sigwant[]   = { SIGCHLD };
+ksudo_sigop             sigops[]    = { sigop_chld };
+volatile sig_atomic_t   sigcaught[1];
 
 void            init            ();
 void            ksudod          (int clisock);
@@ -48,6 +56,36 @@ init ()
     KRBCHK(krb5_sname_to_principal(k5ctx, myname, KSUDO_SRV,
             KRB5_NT_SRV_HST, &myprinc),
         "can't build server principal");
+}
+
+KSUDO_SIGOP(sigop_chld)
+{
+    dRV;
+    int                 stat, i;
+    pid_t               kid;
+    ksudo_sdata_server  *data;
+
+    while (1) {
+        kid = waitpid(-1, &stat, WNOHANG);
+        if (kid == 0)               break;
+        if (kid < 0) {
+            if (errno == ECHILD)    break;
+            SYSCHK(kid, "wait failed");
+        }
+
+        debug("child exitted: pid [%ld] stat [%d]",
+            (long)kid, stat);
+
+        for (i = 0; i < nsessions; i++) {
+            if (!KssOK(i))  continue;
+
+            data = KssDATA(i, server);
+            if (data->pid == kid) {
+                debug("child belonged to [%d]", i);
+                break;
+            }
+        }
+    }
 }
 
 KSUDO_SOP(sop_read_cred)
