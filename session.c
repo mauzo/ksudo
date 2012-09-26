@@ -22,7 +22,7 @@ kss_init (int sess, int fd, ksudo_sop start, void *data)
     BufINIT(&mdata->rbuf);
    
     ksf = ksf_open(fd, KSUDO_FD_RDWR, KSFt(msg), mdata);
-    KssMSGFD(sess, ksf);
+    KssMSGFDs(sess, ksf);
     KssNEXT(sess, start);
     KssL(sess).datafds  = NULL;
     KssL(sess).data     = data;

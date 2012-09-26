@@ -103,13 +103,13 @@ ksf_read (int ix, ksudo_buf *buf)
     int             fd      = KsfFD(ix);
 
     BufENSURE(buf, KSUDO_BUFSIZ);
-    if (!BufFREE(buf)) return;
+    if (!BufFREE(buf)) goto out;
 
     rv = read(fd, BufEND(buf), BufFREE(buf));
     debug("ksf_read [%d] [%lx] [%ld] -> [%d]", 
         fd, BufEND(buf), BufFREE(buf), rv);
 
-    if (rv == EAGAIN) return;
+    if (rv == -1 && errno == EAGAIN) return;
     SYSCHK(rv, "read failed");
 
     if (rv == 0) {
@@ -118,6 +118,9 @@ ksf_read (int ix, ksudo_buf *buf)
     }
 
     BufEXTEND(buf, rv);
+
+  out:
+    if (!BufFREE(buf)) KsfMODE_CLR(ix, KSFm_IN);
 }
 
 void
@@ -126,14 +129,19 @@ ksf_write (int ix, ksudo_buf *buf)
     dRV;
     int             fd      = KsfFD(ix);
 
-    if (!BufFILL(buf)) return;
+    if (!BufFILL(buf)) goto out;
 
     rv = write(fd, BufSTART(buf), BufFILL(buf));
+    debug("ksf_write [%d] [%lx] [%ld] -> [%d]", 
+        fd, BufSTART(buf), BufFILL(buf), rv);
 
-    if (rv == EAGAIN) return;
+    if (rv == -1 && errno == EAGAIN) return;
     SYSCHK(rv, "write failed");
 
     BufCONSUME(buf, rv);
+
+  out:
+    if (!BufFILL(buf)) KsfMODE_CLR(ix, KSFm_OUT);
 }
 
 void
@@ -174,6 +182,9 @@ ioloop ()
 
         for (i = 0; i < nksfds; i++) {
             short   ev  = KsfPOLL(i).revents;
+            KsfPOLL(i).revents = 0;
+
+            debug("poll [%d] [%d]", i, (int)ev);
 
             if (ev & POLLIN)    KsfCALLOP(i, read);
             if (ev & POLLOUT)   KsfCALLOP(i, write);

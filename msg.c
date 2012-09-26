@@ -106,6 +106,9 @@ write_msg (int sess, KSUDO_MSG *msg)
     krb5_data_free(&der);
 
     MbfPUSH(buf, packet);
+    debug("write_msg [%d]=[%d] [%lx][%ld]",
+        sess, KssMSGFD(sess), (long)packet->data, (long)packet->length);
+    KsfMODE_SET(KssMSGFD(sess), KSFm_OUT);
     return 1;
 }
 
@@ -146,6 +149,7 @@ KSUDO_FDOP(msg_fd_read)
 
     KssCALL(sess, &pkt);
     BufCONSUME(buf, pkt.length);
+    if (BufFREE(buf)) KsfMODE_SET(ksf, KSFm_IN);
 }
 
 KSUDO_FDOP(msg_fd_write)
@@ -157,18 +161,24 @@ KSUDO_FDOP(msg_fd_write)
     ckFDOP(msg);
     b   = &data->wbuf;
 
-    if (!MbfLEFT(b)) return;
+    if (!MbfLEFT(b)) goto out;
 
     iov[0].iov_base = MbfPTR(b);
     iov[0].iov_len  = MbfPTRl(b);
     iov[1].iov_base = MbfNEXTp(b);
     iov[1].iov_len  = MbfNEXTl(b);
     rv = writev(KsfFD(ksf), iov, MbfNEXT(b) ? 2 : 1);
+    debug("msg_fd_write [%d] [%lx][%ld] ([%lx][%ld]) -> [%d]",
+        ksf, (long)MbfPTR(b), (long)MbfPTRl(b),
+            (long)MbfNEXTp(b), (long)MbfNEXTl(b), rv);
     
     if (rv == EAGAIN) return;
     SYSCHK(rv, "can't write to msg fd");
 
     MbfCONSUME(b, rv);
+
+  out:
+    if (!MbfLEFT(b)) KsfMODE_CLR(ksf, KSFm_OUT);
 }
 
 ksudo_fdops ksudo_fdops_msg = {

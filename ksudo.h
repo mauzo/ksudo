@@ -189,10 +189,35 @@ typedef struct {
  * this will need to change to a (?:) expression.
  */
 #define KsfCALLOP(f, o) \
-    if (KsfHASOP(f, o)) KsfL(f).ops->o(f)
+    do { \
+        if (KsfHASOP(f, o)) { \
+            debug("KsfCALLOP: [%d] [%s]", (f), #o); \
+            KsfL(f).ops->o(f); \
+        } \
+    } while (0)
 
 #define KsfPOLL(f)  (pollfds[(f)])
 #define KsfFD(f)    (KsfPOLL(f).fd)
+
+#define KSFm_IN     POLLIN
+#define KSFm_OUT    POLLOUT
+
+#define decode_ksfmode(m) \
+    ((m) == KSFm_IN         ? "IN" : \
+     (m) == KSFm_OUT        ? "OUT" : \
+     "???")
+
+#define KsfMODE_IS(f, m)    (KsfPOLL(f).events & (m))
+#define KsfMODE_SET(f, m) \
+    do { \
+        debug("KsfMODE_SET [%d] [%s]", (f), decode_ksfmode(m)); \
+        KsfPOLL(f).events |= (m); \
+    } while (0)
+#define KsfMODE_CLR(f, m) \
+    do { \
+        debug("KsfMODE_CLR [%d] [%s]", (f), decode_ksfmode(m)); \
+        KsfPOLL(f).events &= ~(m); \
+    } while (0)
 
 typedef void (*ksudo_sop) (int, krb5_data *);
 
@@ -223,7 +248,8 @@ typedef struct {
 #define KssDATA(s, t)   ((ksudo_sdata_ ## t *)KssDATAv(s))
 #define KssK5A(s)       (KssL(s).k5a)
 
-#define KssMSGFD(s, f)  (KssL(s).msgfd = (f))
+#define KssMSGFD(s)     (KssL(s).msgfd)
+#define KssMSGFDs(s, f) (KssL(s).msgfd = (f))
 #define KssMBUF(s)      (&KsfDATA(KssL(s).msgfd, msg)->wbuf)
 
 #define KssINIT(s, t, f, o) \

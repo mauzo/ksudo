@@ -84,6 +84,7 @@ KSUDO_SOP(sop_read_cred)
         "can't build AP-REP");
 
     MbfPUSH(KssMBUF(sess), aprep);
+    KsfMODE_SET(KssMSGFD(sess), KSFm_OUT);
     KssNEXT(sess, sop_read_cmd);
 }
 
