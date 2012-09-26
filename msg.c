@@ -26,8 +26,15 @@ read_asn1_length (ksudo_buf *buf, krb5_data *pkt)
     
     p = BufSTART(buf);
 
+#define HEX(n) (int)p[n]
+    debug("ASN.1 pkt [%lx] length [%lu] start [%x %x %x %x %x %x %x %x %x]",
+        (long)p, (long)BufFILL(buf),
+        HEX(0), HEX(1), HEX(2), HEX(3), HEX(4), HEX(5),
+        HEX(6), HEX(7), HEX(8));
+#undef HEX
+
     /* skip tag */
-    if (*p++ & 0x1f == 0x1f) {
+    if ((*p++ & 0x1f) == 0x1f) {
         while (*p++ & 0x80) ;
         p++;
     }
