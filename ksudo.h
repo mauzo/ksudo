@@ -350,6 +350,7 @@ int     read_msg        (int sess, krb5_data *pkt, KSUDO_MSG *msg);
 int     write_msg       (int sess, KSUDO_MSG *msg);
 
 /* session.c */
+void    kss_exit        (int sess, int status);
 void    kss_init        (int sess, int fd, ksudo_sop start, void *data);
 
 /* signal.c */

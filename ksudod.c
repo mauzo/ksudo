@@ -82,6 +82,7 @@ KSUDO_SIGOP(sigop_chld)
             data = KssDATA(i, server);
             if (data->pid == kid) {
                 debug("child belonged to [%d]", i);
+                kss_exit(i, stat);
                 break;
             }
         }
