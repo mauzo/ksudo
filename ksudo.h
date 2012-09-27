@@ -261,6 +261,24 @@ typedef struct {
         kss_init((s), (f), (o), (void *)(__sdata)); \
     } while (0)
 
+#define AsnChoice(a, t, d, e) \
+    do { \
+        (a)->element = choice_KSUDO_ ## t ## _ ## e; \
+        (d) = &(a)->u.e; \
+    } while (0)
+
+#define AsnString(a, s) \
+    do { \
+        (a).length  = strlen(s); \
+        (a).data    = strdup(s); \
+    } while (0)
+
+#define NewMsg(m, d, e) \
+    do { \
+        New((m), 1); \
+        AsnChoice((m), MSG, (d), e); \
+    } while (0)
+
 typedef void (*ksudo_sigop) ();
 #define KSUDO_SIGOP(n)      void n ()
 
