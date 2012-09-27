@@ -1,6 +1,11 @@
 KSUDO DEFINITIONS ::=
 BEGIN
 
+-- Heimdal's ASN.1 compiler can only cope with limits that exactly match
+-- unsigned? int. Grr.
+ksudo_int32 ::= INTEGER (-2147483648..2147483647)
+ksudo_uint32 ::= INTEGER (0..4294967295)
+
 KSUDO-ERR-CODE ::= INTEGER {
     KSUDO_OK(0),
     KSUDO_ENOENT(1),
@@ -28,20 +33,24 @@ KSUDO-FD-MODE ::= INTEGER {
     KSUDO_FD_RDWR(2)
 }
 
+-- see above
+--KSUDO-FDNUM ::= INTEGER (-1..9)
+KSUDO-FDNUM ::= ksudo_int32
+
 KSUDO-ENVOPT-REMOTEFD ::= SEQUENCE {
-    fd      INTEGER,
+    fd      KSUDO-FDNUM,
     mode    KSUDO-FD-MODE
 }
 
 KSUDO-ENVOPT-LOCALFD ::= SEQUENCE {
-    fd      INTEGER,
+    fd      KSUDO-FDNUM,
     mode    KSUDO-FD-MODE,
     path    OCTET STRING
 }
 
 KSUDO-ENVOPT-DUPFD ::= SEQUENCE {
-    fd      INTEGER,
-    onto    INTEGER
+    fd      KSUDO-FDNUM,
+    onto    KSUDO-FDNUM
 }
 
 KSUDO-ENVOPT-TTY ::= NULL
@@ -61,19 +70,21 @@ KSUDO-CMD ::= SEQUENCE {
 }
 
 KSUDO-DATA ::= SEQUENCE {
-    fd      INTEGER,
+    fd      KSUDO-FDNUM,
     data    OCTET STRING
 }
 
+KSUDO-WNDSIZE ::= ksudo_uint32
+
 KSUDO-WINDOW ::= SEQUENCE {
-    fd      INTEGER,
-    incr    INTEGER
+    fd      KSUDO-FDNUM,
+    incr    KSUDO-WNDSIZE
 }
 
-KSUDO-CLOSE ::= INTEGER
+KSUDO-CLOSE ::= KSUDO-FDNUM
 
 -- list taken from SUSv4
-KSUDO-SIGNAL-WK ::= INTEGER {
+KSUDO-SIGNAL ::= INTEGER {
     KSUDO_SIGABRT(1),
     KSUDO_SIGALRM(2),
     KSUDO_SIGBUS(3),
@@ -100,14 +111,14 @@ KSUDO-SIGNAL-WK ::= INTEGER {
     KSUDO_SIGXFSZ(24)
 }
 
-KSUDO-SIGNAL ::= CHOICE {
-    wellknown   [0] KSUDO-SIGNAL-WK,
-    system      [1] INTEGER
-}
+-- see above
+--KSUDO-STATUS ::= INTEGER (0..255)
+KSUDO-STATUS ::= ksudo_int32
 
 KSUDO-EXIT ::= CHOICE {
-    status  [0] INTEGER,
-    signal  [1] KSUDO-SIGNAL
+    status  [0] KSUDO-STATUS,
+    signal  [1] KSUDO-SIGNAL,
+    unknown [2] NULL
 }
 
 KSUDO-MSG ::= CHOICE {
