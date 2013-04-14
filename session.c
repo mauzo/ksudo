@@ -54,12 +54,19 @@ kss_exit (int sess, int status)
         debug("successful exit for [%d] [%d]", sess, *stat);
     }
     else if (WIFSIGNALED(status)) {
-        KSUDO_SIGNAL *sig;
+        KSUDO_SIGNAL    *sig;
 
+        debug("looking for signal [%d]", WTERMSIG(status));
         AsnChoice(exit, EXIT, sig, signal);
-        /* XXX need to map to KSUDO-SIGNAL enum */
-        *sig = WTERMSIG(status);
-        debug("signal exit for [%d] [%d]", sess, *sig);
+        for (*sig = KSUDO_SIGNAL_num - 1; *sig > 0; (*sig)--) {
+            debug("  checking [%d] => [%d] [%s]",
+                *sig, ksudo_sigmap[*sig].ksig_sig,
+                ksudo_sigmap[*sig].ksig_name);
+            if (ksudo_sigmap[*sig].ksig_sig == WTERMSIG(status))
+                break;
+        }
+        debug("signal exit for [%d] [%d] [%s]", sess, *sig,
+            ksudo_sigmap[*sig].ksig_name);
     }
     else {
         void *v;

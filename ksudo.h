@@ -311,6 +311,14 @@ typedef void (*ksudo_sigop) ();
 #define KSUDO_SIGOP(n)      void n ()
 
 typedef struct {
+    int             ksig_sig;
+    const char *    ksig_name;
+} ksudo_sigmapping;
+
+#define KSUDO_SIGNAL_num 26
+const ksudo_sigmapping ksudo_sigmap[KSUDO_SIGNAL_num];
+
+typedef struct {
    ksudo_sop    startop;
 } ksudo_fddata_listen;
 

@@ -11,6 +11,37 @@
 
 #include "ksudo.h"
 
+const ksudo_sigmapping ksudo_sigmap[] = {
+    { .ksig_sig = 0, .ksig_name = "UNKNOWN" },
+#define _sig(n) { .ksig_sig = SIG ## n, .ksig_name = "SIG" #n }
+    _sig(ABRT),
+    _sig(ALRM),
+    _sig(BUS),
+    _sig(CHLD),
+    _sig(CONT),
+    _sig(FPE),
+    _sig(HUP),
+    _sig(ILL),
+    _sig(INT),
+    _sig(KILL),
+    _sig(PIPE),
+    _sig(QUIT),
+    _sig(SEGV),
+    _sig(STOP),
+    _sig(TERM),
+    _sig(TSTP),
+    _sig(TTIN),
+    _sig(TTOU),
+    _sig(USR1),
+    _sig(USR2),
+    _sig(TRAP),
+    _sig(URG),
+    _sig(XCPU),
+    _sig(XFSZ),
+    _sig(SYS)
+#undef _sig
+};
+
 static volatile sig_atomic_t sigcaughtany = 0;
 
 static void 
