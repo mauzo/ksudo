@@ -25,6 +25,10 @@ int                     sigwant[1];
 ksudo_sigop             sigops[1];
 volatile sig_atomic_t   sigcaught[1];
 
+static KSUDO_SOP(sop_read_creds);
+
+KSUDO_MSGOP(msgop_exit);
+
 void    get_creds   (const char *host, krb5_creds *cred);
 void    init        ();
 void    send_cmd    ();
@@ -167,6 +171,44 @@ static KSUDO_SOP(sop_read_creds)
     debug("done AP exchange");
 
     send_cmd(data->usr, data->cmdc, data->cmdv);
+
+    KssSETOP(sess, exit, msgop_exit);
+    KssNEXT(sess, sop_dispatch_msg);
+}
+
+KSUDO_MSGOP(msgop_exit)
+{
+    dMSGOP(client, EXIT);
+
+    ckMSGOP(exit);
+    switch(msg->element) {
+        case choice_KSUDO_EXIT_status:
+            debug("EXIT STATUS [%lu]", msg->u.status);
+            exit(msg->u.status);
+            break;
+
+        case choice_KSUDO_EXIT_signal: {
+            dRV;
+            int                     ksig = msg->u.signal;
+            const ksudo_sigmapping *sig;
+            
+            if (!ksig)
+                errx(255, "exitted with unknown (non-portable) signal");
+
+            sig = &ksudo_sigmap[ksig];
+            debug("EXIT SIGNAL [%lu] [%s]", ksig, sig->ksig_name);
+
+            if (signal(sig->ksig_sig, SIG_DFL) == SIG_ERR)
+                errx(255, "can't set signal to SIG_DFL");
+
+            SYSCHK(raise(sig->ksig_sig), "can't raise signal");
+            errx(255, "%s appears not to be fatal!", sig->ksig_name);
+        }
+
+        default:
+            debug("UNKNOWN EXIT [%lu]", msg->element);
+            break;
+    }
 }
 
 void
