@@ -28,7 +28,8 @@ kss_init (int sess, int fd, ksudo_sop start, void *data)
     KssNEXT(sess, start);
     KssL(sess).datafds  = NULL;
     KssL(sess).data     = data;
-    
+    Zero(KssL(sess).msgop, KSUDO_MSG_num);
+
     KRBCHK(krb5_auth_con_init(k5ctx, &KssK5A(sess)),
         "can't allocate auth context");
    
@@ -68,4 +69,15 @@ kss_exit (int sess, int status)
     }
 
     write_msg(sess, &msg);
+}
+
+KSUDO_SOP(sop_dispatch_msg)
+{
+    KSUDO_MSG       msg;
+    unsigned int    type;
+
+    read_msg(sess, pkt, &msg);
+
+    KssCALLOP(sess, msg);
+    free_KSUDO_MSG(&msg);
 }

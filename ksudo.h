@@ -222,14 +222,24 @@ typedef struct {
 
 typedef void (*ksudo_sop) (int, krb5_data *);
 
-#define KSUDO_SOP(n)    static void n (int sess, krb5_data *pkt)
-/* The ksudo_session_data typedef must be provided by the app */
+#define KSUDO_SOP(n)    void n (int sess, krb5_data *pkt)
 #define dKSSOP(t)       ksudo_sdata_ ## t *data = KssDATA(sess, t)
 #define KSSs_NONE       ((ksudo_sop)0)
+
+typedef void (*ksudo_msgop) (int, unsigned int, void *);
+
+#define KSUDO_MSGOP(n)  static void n (int sess, \
+                            unsigned int msgtype, void *vmsg)
+#define dMSGOP(st, mt)  dKSSOP(st); \
+                        KSUDO_ ## mt *msg = vmsg
+#define ckMSGOP(t)      Assert(msgtype == choice_KSUDO_MSG_ ## t)
+        /* XXX this should come from the ASN.1 */
+#define KSUDO_MSG_num   7
 
 typedef struct {
     ksudo_sop   state;
     void        *data;
+    ksudo_msgop msgop[KSUDO_MSG_num];
 
     krb5_auth_context   k5a;
 
@@ -259,6 +269,24 @@ typedef struct {
         Assert(!KssOK(s)); \
         NewZ(__sdata, 1); \
         kss_init((s), (f), (o), (void *)(__sdata)); \
+    } while (0)
+
+#define KssSETOP(s, t, o) \
+    do { \
+        KssL(s).msgop[choice_KSUDO_MSG_ ## t - 1] = (o); \
+    } while (0)
+
+#define KssCALLOP(s, m) \
+    do { \
+        unsigned int    __msgtype; \
+        ksudo_msgop     __msgop; \
+        \
+        __msgtype = (m).element; \
+        Assert(__msgtype <= KSUDO_MSG_num); \
+        __msgop = KssL(s).msgop[__msgtype - 1]; \
+        debug("CALL MSGOP [%u] [%lx]", __msgtype, (unsigned long)__msgop); \
+        Assert(__msgop); \
+        __msgop((s), __msgtype, (void *)&(m).u); \
     } while (0)
 
 #define AsnChoice(a, t, d, e) \
@@ -306,6 +334,8 @@ typedef struct {
     size_t      nextwnd;
 } ksudo_fddata_data;
 
+typedef void ksudo_sdata_any;
+
 typedef struct {
     char    *usr;
     int     cmdc;
@@ -352,6 +382,7 @@ int     write_msg       (int sess, KSUDO_MSG *msg);
 /* session.c */
 void    kss_exit        (int sess, int status);
 void    kss_init        (int sess, int fd, ksudo_sop start, void *data);
+KSUDO_SOP(sop_dispatch_msg);
 
 /* signal.c */
 void    setup_signals   ();

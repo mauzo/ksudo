@@ -148,7 +148,7 @@ send_creds (krb5_auth_context *k5a, krb5_creds *cred)
     MbfPUSH(KssMBUF(0), packet);
 }
 
-KSUDO_SOP(sop_read_creds)
+static KSUDO_SOP(sop_read_creds)
 {
     dKSSOP(client);
     dKRBCHK;

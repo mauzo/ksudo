@@ -38,8 +38,8 @@ void            ksudod          (int clisock);
 void            read_cmd        (int clisock);
 void            usage           ();
 
-KSUDO_SOP(sop_read_cred);
-KSUDO_SOP(sop_read_cmd);
+static KSUDO_SOP(sop_read_cred);
+static KSUDO_SOP(sop_read_cmd);
 
 void
 init ()
@@ -89,7 +89,7 @@ KSUDO_SIGOP(sigop_chld)
     }
 }
 
-KSUDO_SOP(sop_read_cred)
+static KSUDO_SOP(sop_read_cred)
 {
     dKSSOP(server);
     dKRBCHK;
@@ -127,7 +127,7 @@ KSUDO_SOP(sop_read_cred)
     KssNEXT(sess, sop_read_cmd);
 }
 
-KSUDO_SOP(sop_read_cmd)
+static KSUDO_SOP(sop_read_cmd)
 {
     dKSSOP(server);
     dRV;
